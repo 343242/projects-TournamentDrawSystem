@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' file: data:;">
+  <title>大赛抽签系统</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <!-- 启动页面 -->
+  <div id="welcome-page" class="welcome-page">
+    <div class="welcome-overlay"></div>
+    <div class="welcome-content">
+      <div class="welcome-logo">🏆</div>
+      <h1 class="welcome-title">大赛抽签系统</h1>
+      <p class="welcome-subtitle">Tournament Draw System</p>
+      <div class="welcome-buttons">
+        <button class="welcome-btn btn-start" data-action="start-draw-system">
+          <span class="btn-icon">🎰</span>开始抽签
+        </button>
+        <button class="welcome-btn btn-setting" data-action="change-background">
+          <span class="btn-icon">🖼️</span>设置背景
+        </button>
+        <button class="welcome-btn btn-exit" data-action="exit-app">
+          <span class="btn-icon">🚪</span>退出系统
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 主应用界面 -->
+  <div id="main-app" class="main-app hidden">
+  <!-- 左侧导航栏 -->
+  <nav class="sidebar">
+    <div class="sidebar-header">
+      <div class="logo">🏆</div>
+      <span class="logo-text">抽签系统</span>
+    </div>
+    <div class="nav-menu">
+      <button class="nav-item active" data-page="settings" data-action="switch-page">
+        <span class="nav-icon">⚙️</span>
+        <span class="nav-text">抽签设置</span>
+      </button>
+      <button class="nav-item disabled" data-page="order" id="nav-order" data-action="switch-page">
+        <span class="nav-icon">📋</span>
+        <span class="nav-text">抽签顺序</span>
+      </button>
+      <button class="nav-item disabled" data-page="draw" id="nav-draw" data-action="switch-page">
+        <span class="nav-icon">🎲</span>
+        <span class="nav-text">分组抽签</span>
+      </button>
+    </div>
+    <div class="nav-footer">
+      <button class="nav-item exit-btn" data-action="exit-app">
+        <span class="nav-icon">🚪</span>
+        <span class="nav-text">退出</span>
+      </button>
+    </div>
+  </nav>
+
+  <!-- 主内容区域 -->
+  <main class="main-content">
+    <!-- 抽签设置页面 -->
+    <div id="page-settings" class="page active">
+      <div class="page-header">
+        <div class="header-content">
+          <span class="step-badge">①</span>
+          <h1 id="header-settings">抽签设置</h1>
+        </div>
+      </div>
+
+      <div class="page-body">
+        <div class="settings-content">
+        <!-- 队伍数量模块 -->
+        <div class="module">
+          <div class="module-row">
+            <label class="module-label">抽签队伍数量：</label>
+            <input type="text" class="input-field" id="team-count" value="0" readonly>
+            <button class="btn btn-primary" data-action="select-file">
+              <span class="btn-icon">📤</span>上传队伍数据
+            </button>
+            <button class="btn btn-secondary" data-action="export-result" id="export-btn" disabled>
+              <span class="btn-icon">📥</span>导出抽签结果
+            </button>
+            <button class="btn btn-danger" data-action="clear-data">
+              <span class="btn-icon">🗑️</span>清除数据
+            </button>
+          </div>
+          <p id="selected-file" class="file-info"></p>
+        </div>
+
+        <!-- 比赛项目选择模块 -->
+        <div class="settings-layout">
+          <div class="settings-left">
+            <div class="module project-module">
+              <label class="module-label">比赛项目</label>
+              <div class="project-list" id="project-list">
+                <div class="project-card empty">暂无比赛项目</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="settings-right">
+            <!-- 参赛队伍信息模块 -->
+            <div class="module team-info-module">
+              <div class="team-info-header">
+                <div class="stat-row">
+                  <span class="stat-item">参赛队伍：<strong id="total-teams-display">0</strong></span>
+                </div>
+                <div class="group-count-row">
+                  <label>分组数量：</label>
+                  <input type="number" class="input-field small" id="group-count" min="2" max="20" value="0">
+                  <button class="btn btn-primary btn-sm" data-action="update-group-count">设置</button>
+                </div>
+              </div>
+              <div class="team-info-content">
+                <div class="table-container">
+                  <table class="data-table" id="team-table">
+                    <thead>
+                      <tr>
+                        <th>序号</th>
+                        <th>参赛队伍</th>
+                        <th>学校</th>
+                        <th>种子队</th>
+                        <th>抽签顺序</th>
+                        <th>分组</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr class="empty-row">
+                        <td colspan="6">暂无数据，请上传队伍数据</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        </div><!-- end of settings-content -->
+
+        <!-- 底部操作 -->
+        <div class="page-footer">
+          <button class="btn btn-next" data-action="go-to-next" data-page="order" id="next-settings-btn" disabled>
+            下一步 →
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 抽签顺序页面 -->
+    <div id="page-order" class="page">
+      <div class="page-header">
+        <div class="header-content">
+          <span class="step-badge">②</span>
+          <h1 id="header-order">抽签顺序</h1>
+        </div>
+      </div>
+
+      <div class="page-body">
+        <!-- 左右分栏布局 -->
+        <div class="order-layout">
+          <!-- 左侧：表格区域 -->
+          <div class="order-left">
+            <div class="table-container">
+              <table class="data-table" id="order-table">
+                <thead>
+                  <tr>
+                    <th>抽签顺序</th>
+                    <th>参赛队伍</th>
+                    <th>学校</th>
+                    <th>种子队</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr class="empty-row">
+                    <td colspan="4">请先在"抽签设置"页面上传数据</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- 右侧：控制面板 -->
+          <div class="order-right">
+            <div class="order-status-label" id="order-status-label">--</div>
+            <div class="order-status-box" id="order-status-box">
+              <div class="order-status-text" id="order-status-text">等待开始抽签</div>
+              <div class="order-status-count" id="order-status-count">剩余: -- 支</div>
+            </div>
+            <div class="order-actions">
+              <button class="btn btn-success btn-large" data-action="generate-order" id="generate-order-btn">
+                <span class="btn-icon">🎲</span>启动抽签
+              </button>
+              <button class="btn btn-next" data-action="go-to-next" data-page="draw" id="next-order-btn" disabled>
+                下一步 →
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 分组抽签页面 -->
+    <div id="page-draw" class="page">
+      <div class="page-header">
+        <div class="header-content">
+          <span class="step-badge">③</span>
+          <h1 id="header-draw">分组抽签</h1>
+        </div>
+      </div>
+
+      <div class="page-body">
+        <div class="draw-layout">
+          <!-- 左侧：分组卡片 -->
+          <div class="draw-left">
+            <div class="groups-grid" id="groups-container">
+              <!-- 动态生成分组卡片 -->
+            </div>
+          </div>
+
+          <!-- 右侧：抽签结果表格 + 状态面板 -->
+          <div class="draw-right">
+            <!-- 右上：已抽签队伍表格 -->
+            <div class="draw-right-top">
+              <div class="table-container">
+                <table class="data-table" id="draw-result-table">
+                  <thead>
+                    <tr>
+                      <th>抽签顺序</th>
+                      <th>参赛队伍</th>
+                      <th>学校</th>
+                      <th>种子队</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr class="empty-row">
+                      <td colspan="4">请先开始抽签</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <!-- 右下：状态面板（类似抽签顺序页面右侧） -->
+            <div class="draw-right-bottom">
+              <div class="order-status-label" id="draw-status-label">--</div>
+              <div class="order-status-box" id="draw-status-box">
+                <div class="draw-slot" id="draw-slot">
+                  <span class="slot-text">点击"开始抽签"进行分组</span>
+                </div>
+                <div class="order-status-count" id="draw-status-count">剩余: -- 支</div>
+              </div>
+              <div class="draw-actions">
+                <button class="btn btn-success btn-large" data-action="start-draw-animation" id="start-draw-btn">
+                  <span class="btn-icon">🎰</span>开始抽签
+                </button>
+                <button class="btn btn-warning" data-action="reset-draw" id="reset-draw-btn" disabled>
+                  <span class="btn-icon">🔄</span>重新抽签
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="page-footer">
+          <button class="btn btn-back" data-action="go-to-prev" data-page="order">← 上一步</button>
+          <button class="btn btn-success" data-action="export-result" id="final-export-btn" disabled>
+            <span class="btn-icon">📥</span>导出结果
+          </button>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  </div><!-- end of main-app -->
+
+  <!-- 自定义确认弹窗 -->
+  <div id="confirm-dialog" class="dialog-overlay hidden">
+    <div class="dialog-box">
+      <div class="dialog-message" id="dialog-message">确定要执行此操作吗？</div>
+      <div class="dialog-buttons">
+        <button class="btn btn-secondary" id="dialog-cancel">取消</button>
+        <button class="btn btn-primary" id="dialog-confirm">确定</button>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="src/app.js"></script>
+</body>
+</html>

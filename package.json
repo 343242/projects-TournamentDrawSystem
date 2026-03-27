@@ -1,0 +1,39 @@
+{
+  "name": "tournament-draw-system",
+  "version": "1.0.0",
+  "description": "大赛抽签系统",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "build": "electron-builder"
+  },
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "electron": "^37.3.1",
+    "electron-builder": "^24.9.1"
+  },
+  "dependencies": {
+    "xlsx": "^0.18.5"
+  },
+  "build": {
+    "appId": "com.tournament.draw",
+    "productName": "大赛抽签系统",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "**/*",
+      "!**/*.Zone.Identifier"
+    ],
+    "win": {
+      "target": "nsis"
+    },
+    "mac": {
+      "target": "dmg"
+    },
+    "linux": {
+      "target": "AppImage"
+    }
+  }
+}
