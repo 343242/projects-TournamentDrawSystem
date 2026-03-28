@@ -132,7 +132,7 @@ function clearData() {
     // Reset draw page
     document.getElementById('groups-container').innerHTML = '';
     const drawTbody = document.querySelector('#draw-result-table tbody');
-    drawTbody.innerHTML = '<tr class="empty-row"><td colspan="4">请先开始抽签</td></tr>';
+    drawTbody.innerHTML = '<tr class="empty-row"><td colspan="5">请先开始抽签</td></tr>';
     const slot = document.getElementById('draw-slot');
     slot.classList.remove('active');
     slot.innerHTML = '<span class="slot-text">点击"开始抽签"进行分组</span>';

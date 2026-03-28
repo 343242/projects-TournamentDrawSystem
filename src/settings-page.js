@@ -97,7 +97,7 @@ export function selectProject(projectName) {
   store.teamsData = project.teams;
   store.drawCompleted = project.drawCompleted;
 
-  if (project.drawCompleted && project.groupCount > 0) {
+  if (project.groupCount > 0 && project.teams.length > 0) {
     store.drawAlgorithm = new DrawAlgorithm(store.teamsData, project.groupCount);
     store.drawAlgorithm.restore();
   } else {

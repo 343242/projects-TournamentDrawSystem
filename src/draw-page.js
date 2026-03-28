@@ -37,6 +37,7 @@ export function addDrawResultRow(team, orderNum) {
     <td>${escapeHtml(team.teamName)}</td>
     <td>${escapeHtml(team.school)}</td>
     <td class="${team.isSeeded ? 'seeded' : ''}">${team.isSeeded ? '是' : '-'}</td>
+    <td>第 ${team.group} 组</td>
   `;
   tbody.appendChild(tr);
 
@@ -51,7 +52,7 @@ export function renderDrawResultTable() {
   tbody.innerHTML = '';
 
   if (!store.drawAlgorithm) {
-    tbody.innerHTML = '<tr class="empty-row"><td colspan="4">请先开始抽签</td></tr>';
+    tbody.innerHTML = '<tr class="empty-row"><td colspan="5">请先开始抽签</td></tr>';
     return;
   }
 
@@ -64,7 +65,7 @@ export function renderDrawResultTable() {
   });
 
   if (drawnTeams.length === 0) {
-    tbody.innerHTML = '<tr class="empty-row"><td colspan="4">请先开始抽签</td></tr>';
+    tbody.innerHTML = '<tr class="empty-row"><td colspan="5">请先开始抽签</td></tr>';
     return;
   }
 
@@ -77,6 +78,7 @@ export function renderDrawResultTable() {
       <td>${escapeHtml(team.teamName)}</td>
       <td>${escapeHtml(team.school)}</td>
       <td class="${team.isSeeded ? 'seeded' : ''}">${team.isSeeded ? '是' : '-'}</td>
+      <td>${team.group ? '第 ' + team.group + ' 组' : '-'}</td>
     `;
     tbody.appendChild(tr);
   });
@@ -326,7 +328,7 @@ export function resetDraw() {
     initGroupsDisplay();
 
     const tbody = document.querySelector('#draw-result-table tbody');
-    tbody.innerHTML = '<tr class="empty-row"><td colspan="4">请先开始抽签</td></tr>';
+    tbody.innerHTML = '<tr class="empty-row"><td colspan="5">请先开始抽签</td></tr>';
 
     eventBus.emit('renderTeamTable');
     eventBus.emit('renderProjectList');
