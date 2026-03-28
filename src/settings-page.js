@@ -79,7 +79,7 @@ export function renderProjectList() {
         <span class="project-stats">队伍: ${project.teams.length} | 分组: ${project.groupCount}</span>
       </div>
       <div class="project-status">
-        ${project.drawCompleted ? '✓ 已完成' : (project.drawOrderGenerated ? '⏳ 进行中' : '○ 待抽签')}
+        ${project.drawCompleted ? '✓ 已完成' : (project.drawOrderGenerated || project.drawOrderSequence ? '⏳ 进行中' : '○ 待抽签')}
       </div>
     `;
     card.onclick = () => selectProject(name);

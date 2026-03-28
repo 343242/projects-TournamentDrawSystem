@@ -27,20 +27,13 @@ export function initGroupsDisplay() {
 }
 
 export function addDrawResultRow(team, orderNum) {
+  const row = document.getElementById(`draw-row-${orderNum}`);
+  if (row) {
+    const groupCell = row.cells[3];
+    groupCell.textContent = team.group ? `第 ${team.group} 组` : '-';
+  }
+
   const tbody = document.querySelector('#draw-result-table tbody');
-  const emptyRow = tbody.querySelector('.empty-row');
-  if (emptyRow) emptyRow.remove();
-
-  const tr = document.createElement('tr');
-  tr.innerHTML = `
-    <td><strong>${orderNum}</strong></td>
-    <td>${escapeHtml(team.teamName)}</td>
-    <td>${escapeHtml(team.school)}</td>
-    <td class="${team.isSeeded ? 'seeded' : ''}">${team.isSeeded ? '是' : '-'}</td>
-    <td>第 ${team.group} 组</td>
-  `;
-  tbody.appendChild(tr);
-
   const container = tbody.closest('.table-container');
   if (container) {
     container.scrollTo({ top: container.scrollHeight, behavior: 'smooth' });
@@ -51,32 +44,21 @@ export function renderDrawResultTable() {
   const tbody = document.querySelector('#draw-result-table tbody');
   tbody.innerHTML = '';
 
-  if (!store.drawAlgorithm) {
-    tbody.innerHTML = '<tr class="empty-row"><td colspan="5">请先开始抽签</td></tr>';
+  const orderedTeams = store.teamsData
+    .filter(team => team.drawOrder > 0)
+    .sort((a, b) => a.drawOrder - b.drawOrder);
+
+  if (orderedTeams.length === 0) {
+    tbody.innerHTML = '<tr class="empty-row"><td colspan="4">请先开始抽签</td></tr>';
     return;
   }
 
-  const groups = store.drawAlgorithm.getGroups();
-  const drawnTeams = [];
-  groups.forEach(group => {
-    group.teams.forEach(team => {
-      drawnTeams.push(team);
-    });
-  });
-
-  if (drawnTeams.length === 0) {
-    tbody.innerHTML = '<tr class="empty-row"><td colspan="5">请先开始抽签</td></tr>';
-    return;
-  }
-
-  drawnTeams.sort((a, b) => a.drawOrder - b.drawOrder);
-
-  drawnTeams.forEach(team => {
+  orderedTeams.forEach(team => {
     const tr = document.createElement('tr');
+    tr.id = `draw-row-${team.drawOrder}`;
     tr.innerHTML = `
       <td><strong>${team.drawOrder}</strong></td>
       <td>${escapeHtml(team.teamName)}</td>
-      <td>${escapeHtml(team.school)}</td>
       <td class="${team.isSeeded ? 'seeded' : ''}">${team.isSeeded ? '是' : '-'}</td>
       <td>${team.group ? '第 ' + team.group + ' 组' : '-'}</td>
     `;
@@ -155,7 +137,7 @@ export function startDrawAnimation() {
   }
 
   // Guard: require draw order to be generated before grouping
-  if (store.teamsData[0].drawOrder === 0) {
+  if (!store.projectsData[store.currentProject] || !store.projectsData[store.currentProject].drawOrderGenerated) {
     showAlertDialog('请先在"抽签顺序"页面生成抽签顺序');
     return;
   }
@@ -168,8 +150,7 @@ export function startDrawAnimation() {
   initGroupsDisplay();
   store.drawCount = 0;
 
-  const tbody = document.querySelector('#draw-result-table tbody');
-  tbody.innerHTML = '';
+  renderDrawResultTable();
 
   document.getElementById('reset-draw-btn').disabled = false;
   document.getElementById('final-export-btn').disabled = true;
@@ -327,8 +308,7 @@ export function resetDraw() {
 
     initGroupsDisplay();
 
-    const tbody = document.querySelector('#draw-result-table tbody');
-    tbody.innerHTML = '<tr class="empty-row"><td colspan="5">请先开始抽签</td></tr>';
+    renderDrawResultTable();
 
     eventBus.emit('renderTeamTable');
     eventBus.emit('renderProjectList');

@@ -46,7 +46,7 @@ function updateUIForProject() {
   document.getElementById('next-settings-btn').disabled = project.teams.length === 0;
   document.getElementById('next-order-btn').disabled = !project.drawOrderGenerated;
 
-  if (project.drawOrderGenerated) {
+  if (project.drawOrderGenerated || project.teams.some(t => t.drawOrder > 0)) {
     renderOrderTable();
   } else {
     const orderTbody = document.querySelector('#order-table tbody');
@@ -54,6 +54,22 @@ function updateUIForProject() {
   }
 
   updateOrderStatus();
+
+  // Update order button state
+  const genBtn = document.getElementById('generate-order-btn');
+  if (project.drawOrderGenerated) {
+    genBtn.disabled = true;
+    genBtn.innerHTML = '<span class="btn-icon">✅</span>抽签完成';
+    genBtn.className = 'btn btn-success btn-large';
+  } else if (project.drawOrderSequence) {
+    genBtn.disabled = false;
+    genBtn.innerHTML = '<span class="btn-icon">▶️</span>继续抽签';
+    genBtn.className = 'btn btn-primary btn-large';
+  } else {
+    genBtn.disabled = false;
+    genBtn.innerHTML = '<span class="btn-icon">🎲</span>启动抽签';
+    genBtn.className = 'btn btn-success btn-large';
+  }
 
   if (project.drawCompleted && store.drawAlgorithm) {
     initGroupsDisplay();
@@ -132,7 +148,7 @@ function clearData() {
     // Reset draw page
     document.getElementById('groups-container').innerHTML = '';
     const drawTbody = document.querySelector('#draw-result-table tbody');
-    drawTbody.innerHTML = '<tr class="empty-row"><td colspan="5">请先开始抽签</td></tr>';
+    drawTbody.innerHTML = '<tr class="empty-row"><td colspan="4">请先开始抽签</td></tr>';
     const slot = document.getElementById('draw-slot');
     slot.classList.remove('active');
     slot.innerHTML = '<span class="slot-text">点击"开始抽签"进行分组</span>';

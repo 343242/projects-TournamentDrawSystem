@@ -204,7 +204,7 @@ function testStartDrawAnimationContinuesFlowAndPreservesDrawOrder() {
     drawCompleted: false,
     drawCount: 0,
     currentProject: 'project-1',
-    projectsData: { 'project-1': { drawCompleted: false } },
+    projectsData: { 'project-1': { drawCompleted: false, drawOrderGenerated: true } },
   };
   const document = createDrawPageDom();
   const drawPage = loadModule(
