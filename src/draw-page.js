@@ -6,12 +6,15 @@ import { escapeHtml } from './utils.js';
 import { eventBus } from './events.js';
 import DrawAlgorithm from '../draw-algorithm.js';
 
+const getGroupLabel = (i) => String.fromCharCode(65 + i);
+
+const IDLE_SLOT_HTML = '<span class="slot-text">抽签队伍</span><br><span class="slot-text"><b>等待抽签</b></span>';
+
 export function initGroupsDisplay() {
   const container = document.getElementById('groups-container');
   container.innerHTML = '';
 
   const groupCount = parseInt(document.getElementById('group-count').value) || DEFAULT_GROUP_COUNT;
-  const getGroupLabel = (i) => String.fromCharCode(65 + i);
 
   for (let i = 0; i < groupCount; i++) {
     const card = document.createElement('div');
@@ -30,7 +33,7 @@ export function addDrawResultRow(team, orderNum) {
   const row = document.getElementById(`draw-row-${orderNum}`);
   if (row) {
     const groupCell = row.cells[3];
-    groupCell.textContent = team.group ? `第 ${team.group} 组` : '-';
+    groupCell.textContent = team.group ? getGroupLabel(team.group - 1) : '-';
   }
 
   const tbody = document.querySelector('#draw-result-table tbody');
@@ -60,7 +63,7 @@ export function renderDrawResultTable() {
       <td><strong>${team.drawOrder}</strong></td>
       <td>${escapeHtml(team.teamName)}</td>
       <td class="${team.isSeeded ? 'seeded' : ''}">${team.isSeeded ? '是' : '-'}</td>
-      <td>${team.group ? '第 ' + team.group + ' 组' : '-'}</td>
+      <td>${team.group ? getGroupLabel(team.group - 1) : '-'}</td>
     `;
     tbody.appendChild(tr);
   });
@@ -131,11 +134,6 @@ export function startDrawAnimation() {
     return;
   }
 
-  if (store.drawAlgorithm) {
-    performDraw();
-    return;
-  }
-
   // Guard: require draw order to be generated before grouping
   if (!store.projectsData[store.currentProject] || !store.projectsData[store.currentProject].drawOrderGenerated) {
     showAlertDialog('请先在"抽签顺序"页面生成抽签顺序');
@@ -150,21 +148,39 @@ export function startDrawAnimation() {
   initGroupsDisplay();
   store.drawCount = 0;
 
-  renderDrawResultTable();
-
   document.getElementById('reset-draw-btn').disabled = false;
   document.getElementById('final-export-btn').disabled = true;
   document.getElementById('export-btn').disabled = true;
 
-  renderSeededTeams(store.drawAlgorithm.getGroups());
-  updateDrawStatus();
+  renderDrawResultTable();
 
-  if (store.drawAlgorithm.remainingTeams.length === 0) {
-    finishDraw();
-    return;
+  renderSeededTeams(store.drawAlgorithm.getGroups());
+
+  // Auto-draw all remaining teams at once
+  while (store.drawAlgorithm.remainingTeams.length > 0) {
+    const result = store.drawAlgorithm.drawOne();
+    if (result) {
+      store.drawCount++;
+      result.team.group = result.groupIndex + 1;
+
+      const body = document.getElementById(`group-body-${result.groupIndex}`);
+      if (body) {
+        body.appendChild(createTeamItem(result.team));
+      }
+
+      const countEl = document.getElementById(`group-count-${result.groupIndex}`);
+      if (countEl) {
+        const targetGroup = store.drawAlgorithm.getGroups()[result.groupIndex];
+        countEl.textContent = `${targetGroup.teams.length} 支队伍`;
+      }
+
+      addDrawResultRow(result.team, result.team.drawOrder);
+    }
   }
 
-  updateStartButton('继续抽签');
+  renderDrawResultTable();
+  updateDrawStatus();
+  finishDraw();
 }
 
 export function createTeamItem(team) {
@@ -196,7 +212,7 @@ export function performDraw() {
     slot.classList.add('active');
     slot.innerHTML = `
       <span class="slot-team slot-team-highlight">${escapeHtml(result.team.teamName)}</span>
-      <span class="slot-school">${escapeHtml(result.team.school)} → 第 ${result.groupIndex + 1} 组</span>
+      <span class="slot-group">→ ${getGroupLabel(result.groupIndex)}</span>
     `;
 
     addDrawResultRow(result.team, result.team.drawOrder);
@@ -277,6 +293,7 @@ export function finishDraw() {
 
   updateStartButton('开始抽签');
   document.getElementById('start-draw-btn').disabled = true;
+  document.getElementById('reset-draw-btn').disabled = false;
   document.getElementById('final-export-btn').disabled = false;
   document.getElementById('export-btn').disabled = false;
 
@@ -303,8 +320,7 @@ export function resetDraw() {
       team.group = 0;
     });
 
-    const groupCount = parseInt(document.getElementById('group-count').value) || DEFAULT_GROUP_COUNT;
-    store.drawAlgorithm = new DrawAlgorithm(store.teamsData, groupCount);
+    store.drawAlgorithm = null;
 
     initGroupsDisplay();
 
@@ -316,7 +332,7 @@ export function resetDraw() {
     store.drawCount = 0;
     const slot = document.getElementById('draw-slot');
     slot.classList.remove('active');
-    slot.innerHTML = '<span class="slot-text">点击"开始抽签"进行分组</span>';
+    slot.innerHTML = IDLE_SLOT_HTML;
     updateDrawStatus();
 
     updateStartButton('开始抽签');

@@ -95,7 +95,7 @@ function updateUIForProject() {
     renderDrawResultTable();
     updateDrawStatus();
     document.getElementById('draw-slot').classList.remove('active');
-    document.getElementById('draw-slot').innerHTML = '<span class="slot-text">点击"开始抽签"进行分组</span>';
+    document.getElementById('draw-slot').innerHTML = '<span class="slot-text">抽签队伍</span><br><span class="slot-text"><b>等待抽签</b></span>';
     document.getElementById('start-draw-btn').disabled = project.teams.length === 0;
     document.getElementById('reset-draw-btn').disabled = true;
     document.getElementById('final-export-btn').disabled = true;
@@ -151,7 +151,7 @@ function clearData() {
     drawTbody.innerHTML = '<tr class="empty-row"><td colspan="4">请先开始抽签</td></tr>';
     const slot = document.getElementById('draw-slot');
     slot.classList.remove('active');
-    slot.innerHTML = '<span class="slot-text">点击"开始抽签"进行分组</span>';
+    slot.innerHTML = '<span class="slot-text">抽签队伍</span><br><span class="slot-text"><b>等待抽签</b></span>';
     const drawStatusLabel = document.getElementById('draw-status-label');
     if (drawStatusLabel) drawStatusLabel.textContent = '--';
     const drawStatusCount = document.getElementById('draw-status-count');
@@ -174,6 +174,8 @@ registerPageInit('draw', () => {
   if (store.drawAlgorithm) {
     initGroupsDisplay();
   }
+  renderDrawResultTable();
+  updateDrawStatus();
 });
 
 registerPageLeave('order', pauseOrderDraw);
