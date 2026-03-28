@@ -1,10 +1,11 @@
 // 抽签设置页面逻辑
 
-import { store } from './store.js';
+import { store, DEFAULT_GROUP_COUNT, MIN_GROUP_COUNT, MAX_GROUP_COUNT } from './store.js';
 import { showAlertDialog } from './dialog.js';
 import { updateNavigationState, updatePageHeaders } from './navigation.js';
 import { escapeHtml } from './utils.js';
 import { stopOrderAnimation } from './order-page.js';
+import { eventBus } from './events.js';
 import DrawAlgorithm from '../draw-algorithm.js';
 
 export function renderTeamTable() {
@@ -33,7 +34,6 @@ export function renderTeamTable() {
 }
 
 export function updateGroupCount() {
-  // 检查是否有队伍数据
   if (store.teamsData.length === 0) {
     showAlertDialog('请先上传队伍数据');
     return;
@@ -41,22 +41,18 @@ export function updateGroupCount() {
 
   const groupCount = parseInt(document.getElementById('group-count').value) || 0;
 
-  if (groupCount < 2 || groupCount > 20) return;
+  if (groupCount < MIN_GROUP_COUNT || groupCount > MAX_GROUP_COUNT) return;
   if (store.teamsData.length > 0 && groupCount > store.teamsData.length) return;
 
-  // 更新当前项目的分组数量
   if (store.currentProject && store.projectsData[store.currentProject]) {
     store.projectsData[store.currentProject].groupCount = groupCount;
-    // 分组数变更使已有抽签结果失效
     store.projectsData[store.currentProject].drawCompleted = false;
   }
 
-  // 分组数变更后，旧分组结果全部失效
   store.teamsData.forEach(team => {
     team.group = 0;
   });
 
-  // 重置算法以便使用新的分组数
   store.drawAlgorithm = null;
   store.drawCompleted = false;
   renderProjectList();
@@ -94,7 +90,6 @@ export function renderProjectList() {
 export function selectProject(projectName) {
   if (!store.projectsData[projectName]) return;
 
-  // 切换项目前停止进行中的抽签顺序动画
   stopOrderAnimation();
 
   store.currentProject = projectName;
@@ -102,7 +97,6 @@ export function selectProject(projectName) {
   store.teamsData = project.teams;
   store.drawCompleted = project.drawCompleted;
 
-  // 如果项目已完成抽签，重建算法实例以恢复分组结果
   if (project.drawCompleted && project.groupCount > 0) {
     store.drawAlgorithm = new DrawAlgorithm(store.teamsData, project.groupCount);
     store.drawAlgorithm.restore();
@@ -110,11 +104,8 @@ export function selectProject(projectName) {
     store.drawAlgorithm = null;
   }
 
-  // 通知 app.js 更新所有页面 UI
-  if (typeof window._updateUIForProject === 'function') {
-    window._updateUIForProject();
-  }
-
+  // Notify app.js to update all page UIs via event bus
+  eventBus.emit('updateUIForProject');
   renderProjectList();
   updateNavigationState();
   updatePageHeaders();

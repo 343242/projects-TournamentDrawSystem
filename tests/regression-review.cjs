@@ -171,7 +171,7 @@ function createSettingsDom(groupCountValue) {
   return document;
 }
 
-const root = '/home/instant/projects/TournamentDrawSystem';
+const root = path.join(__dirname, '..');
 const drawAlgorithmModule = loadModule(path.join(root, 'draw-algorithm.js'));
 const DrawAlgorithm = drawAlgorithmModule.default;
 
@@ -213,6 +213,7 @@ function testStartDrawAnimationContinuesFlowAndPreservesDrawOrder() {
       './store.js': { store },
       './dialog.js': { showAlertDialog: () => {}, showConfirmDialog: () => {} },
       './utils.js': { escapeHtml: (value) => String(value) },
+      './events.js': { eventBus: { on: () => {}, off: () => {}, emit: () => {} } },
       '../draw-algorithm.js': { default: DrawAlgorithm },
     },
     {
@@ -258,6 +259,7 @@ function testUpdateGroupCountClearsExistingGroups() {
       './dialog.js': { showAlertDialog: () => {} },
       './navigation.js': { updateNavigationState: () => {}, updatePageHeaders: () => {} },
       './utils.js': { escapeHtml: (value) => String(value) },
+      './events.js': { eventBus: { on: () => {}, off: () => {}, emit: () => {} } },
       './order-page.js': { stopOrderAnimation: () => {} },
       '../draw-algorithm.js': { default: DrawAlgorithm },
     },

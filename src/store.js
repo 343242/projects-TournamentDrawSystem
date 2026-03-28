@@ -1,20 +1,25 @@
-// 集中式应用状态 - 所有页面模块共享
-// 单窗口 Electron 应用推荐方式：同进程模块通过 ES Modules import 共享状态
+// Centralized application state - shared by all page modules
+// Single-window Electron app recommended pattern: shared state via ES Modules import
+
+export const DEFAULT_GROUP_COUNT = 9;
+export const MIN_GROUP_COUNT = 2;
+export const MAX_GROUP_COUNT = 20;
 
 export const store = {
   teamsData: [],
   drawAlgorithm: null,
   currentFilePath: null,
   drawCompleted: false,
+  drawCount: 0,
 
-  // 多项目支持
+  // Multi-project support
   projectsData: {},  // { sheetName: { teams: [], groupCount: 9, drawOrderGenerated: false, drawCompleted: false } }
   currentProject: null,
   sheetNames: [],
 
-  // 防抖保护
-  isGeneratingOrder: false,
-
-  // 抽签顺序动画状态
+  // Draw order animation state
   drawOrderState: null,
+
+  // Anti-debounce
+  isGeneratingOrder: false,
 };

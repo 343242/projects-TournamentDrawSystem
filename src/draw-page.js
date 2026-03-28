@@ -1,15 +1,16 @@
 // 分组抽签页面逻辑
 
-import { store } from './store.js';
+import { store, DEFAULT_GROUP_COUNT } from './store.js';
 import { showAlertDialog, showConfirmDialog } from './dialog.js';
 import { escapeHtml } from './utils.js';
+import { eventBus } from './events.js';
 import DrawAlgorithm from '../draw-algorithm.js';
 
 export function initGroupsDisplay() {
   const container = document.getElementById('groups-container');
   container.innerHTML = '';
 
-  const groupCount = parseInt(document.getElementById('group-count').value) || 9;
+  const groupCount = parseInt(document.getElementById('group-count').value) || DEFAULT_GROUP_COUNT;
   const getGroupLabel = (i) => String.fromCharCode(65 + i);
 
   for (let i = 0; i < groupCount; i++) {
@@ -151,13 +152,13 @@ export function startDrawAnimation() {
     return;
   }
 
-  const groupCount = parseInt(document.getElementById('group-count').value) || 9;
-
+  // Guard: require draw order to be generated before grouping
   if (store.teamsData[0].drawOrder === 0) {
-    if (typeof window._generateOrder === 'function') {
-      window._generateOrder();
-    }
+    showAlertDialog('请先在"抽签顺序"页面生成抽签顺序');
+    return;
   }
+
+  const groupCount = parseInt(document.getElementById('group-count').value) || DEFAULT_GROUP_COUNT;
 
   store.drawAlgorithm = new DrawAlgorithm(store.teamsData, groupCount);
   store.drawAlgorithm.allocateSeededTeams();
@@ -303,12 +304,8 @@ export function finishDraw() {
     console.warn('分组验证问题:', validation.issues);
   }
 
-  if (typeof window._renderTeamTable === 'function') {
-    window._renderTeamTable();
-  }
-  if (typeof window._renderProjectList === 'function') {
-    window._renderProjectList();
-  }
+  eventBus.emit('renderTeamTable');
+  eventBus.emit('renderProjectList');
 }
 
 export function resetDraw() {
@@ -323,7 +320,7 @@ export function resetDraw() {
       team.group = 0;
     });
 
-    const groupCount = parseInt(document.getElementById('group-count').value) || 9;
+    const groupCount = parseInt(document.getElementById('group-count').value) || DEFAULT_GROUP_COUNT;
     store.drawAlgorithm = new DrawAlgorithm(store.teamsData, groupCount);
 
     initGroupsDisplay();
@@ -331,12 +328,8 @@ export function resetDraw() {
     const tbody = document.querySelector('#draw-result-table tbody');
     tbody.innerHTML = '<tr class="empty-row"><td colspan="4">请先开始抽签</td></tr>';
 
-    if (typeof window._renderTeamTable === 'function') {
-      window._renderTeamTable();
-    }
-    if (typeof window._renderProjectList === 'function') {
-      window._renderProjectList();
-    }
+    eventBus.emit('renderTeamTable');
+    eventBus.emit('renderProjectList');
 
     store.drawCount = 0;
     const slot = document.getElementById('draw-slot');

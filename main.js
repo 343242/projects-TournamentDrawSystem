@@ -1,10 +1,14 @@
 const { app, BrowserWindow, ipcMain, dialog } = require('electron');
 const path = require('path');
+const fs = require('fs');
+const XLSX = require('xlsx');
 
 let mainWindow;
 
 function createWindow() {
-  mainWindow = new BrowserWindow({
+  const iconPath = path.join(__dirname, 'icon.png');
+
+  const windowOptions = {
     width: 1400,
     height: 900,
     minWidth: 1200,
@@ -16,9 +20,15 @@ function createWindow() {
       sandbox: true,
       preload: path.join(__dirname, 'preload.js')
     },
-    icon: path.join(__dirname, 'icon.png'),
     title: '大赛抽签系统'
-  });
+  };
+
+  // Only set icon if the file exists
+  if (fs.existsSync(iconPath)) {
+    windowOptions.icon = iconPath;
+  }
+
+  mainWindow = new BrowserWindow(windowOptions);
 
   mainWindow.loadFile('index.html');
   mainWindow.maximize();  // 窗口默认最大化
@@ -35,9 +45,6 @@ function createWindow() {
       event.preventDefault();
     }
   });
-
-  // 开发模式下打开开发者工具
-  // mainWindow.webContents.openDevTools();
 }
 
 app.whenReady().then(() => {
@@ -70,7 +77,6 @@ ipcMain.handle('import-excel', async (event) => {
       return { success: false, canceled: true };
     }
     const filePath = result.filePaths[0];
-    const XLSX = require('xlsx');
     const workbook = XLSX.readFile(filePath);
     const data = {
       sheetNames: workbook.SheetNames,
@@ -99,7 +105,6 @@ ipcMain.handle('export-excel', async (event, data) => {
     if (result.canceled) {
       return { success: false, canceled: true };
     }
-    const XLSX = require('xlsx');
     const ws = XLSX.utils.aoa_to_sheet(data);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, '分组结果');
