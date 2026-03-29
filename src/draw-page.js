@@ -9,7 +9,10 @@ import DrawAlgorithm from '../draw-algorithm.js';
 
 const getGroupLabel = (i) => String.fromCharCode(65 + i);
 
-const IDLE_SLOT_HTML = '<span class="slot-text">抽签队伍</span><br><span class="slot-text"><b>等待抽签</b></span>';
+const IDLE_SLOT_HTML = '<span class="slot-text">等待抽签</span>';
+
+// 抽签动画状态（类似 order-page 的 drawOrderState）
+let drawState = null;
 
 export function initGroupsDisplay() {
   const container = document.getElementById('groups-container');
@@ -72,11 +75,10 @@ export function renderDrawResultTable() {
 
 export function updateDrawStatus() {
   const labelEl = document.getElementById('draw-status-label');
-  const countEl = document.getElementById('draw-status-count');
+  if (!labelEl) return;
 
   if (!store.drawAlgorithm) {
     labelEl.textContent = '--';
-    countEl.textContent = '剩余: -- 支';
     return;
   }
 
@@ -85,21 +87,12 @@ export function updateDrawStatus() {
   const drawn = total - remaining;
 
   if (store.drawCompleted) {
-    labelEl.textContent = `共 ${total} 支`;
-    countEl.textContent = `${total} 支队伍已分配到 ${store.drawAlgorithm.groupCount} 个组`;
+    labelEl.textContent = `共 ${total} 支 · ${store.drawAlgorithm.groupCount} 组`;
   } else if (drawn > 0) {
-    labelEl.textContent = `第 ${drawn} / ${total} 号`;
-    countEl.textContent = `剩余: ${remaining} 支`;
+    labelEl.textContent = `第 ${drawn} / ${total} 号 · 剩余 ${remaining} 支`;
   } else {
     labelEl.textContent = `共 ${total} 支`;
-    countEl.textContent = `剩余: ${total} 支`;
   }
-}
-
-function updateStartButton(label) {
-  const button = document.getElementById('start-draw-btn');
-  if (!button) return;
-  button.innerHTML = `<span class="btn-icon">🎰</span>${label}`;
 }
 
 function renderSeededTeams(groups) {
@@ -131,9 +124,7 @@ export function startDrawAnimation() {
     return;
   }
 
-  if (store.drawCompleted) {
-    return;
-  }
+  if (store.drawCompleted) return;
 
   // Guard: require draw order to be generated before grouping
   if (!store.projectsData[store.currentProject] || !store.projectsData[store.currentProject].drawOrderGenerated) {
@@ -141,23 +132,71 @@ export function startDrawAnimation() {
     return;
   }
 
-  const groupCount = parseInt(document.getElementById('group-count').value) || DEFAULT_GROUP_COUNT;
+  const btn = document.getElementById('start-draw-btn');
 
+  // 暂停（正在运行时点击）
+  if (drawState && !drawState.isPaused && !drawState.isComplete) {
+    if (drawState.phase === 'selected') {
+      drawState.pendingPause = true;
+      return;
+    }
+    drawState.isPaused = true;
+    drawState.phase = 'idle';
+    if (drawState.flashControl) drawState.flashControl.cancel();
+    if (drawState.flyControl) drawState.flyControl.cancel();
+    clearTimeout(drawState.nextTimer);
+    drawState.flashControl = null;
+    drawState.flyControl = null;
+    drawState.nextTimer = null;
+
+    const slot = document.getElementById('draw-slot');
+    slot.classList.remove('active');
+    slot.innerHTML = IDLE_SLOT_HTML;
+
+    btn.innerHTML = '<span class="btn-icon">▶️</span>继续抽签';
+    btn.className = 'btn btn-primary btn-large';
+    updateDrawStatus();
+    return;
+  }
+
+  // 继续（暂停后点击）
+  if (drawState && drawState.isPaused) {
+    drawState.isPaused = false;
+    drawState.pendingPause = false;
+    btn.innerHTML = '<span class="btn-icon">⏸️</span>暂停抽签';
+    btn.className = 'btn btn-warning btn-large';
+    drawNextTeam();
+    return;
+  }
+
+  // 全新开始
+  const groupCount = parseInt(document.getElementById('group-count').value) || DEFAULT_GROUP_COUNT;
   store.drawAlgorithm = new DrawAlgorithm(store.teamsData, groupCount);
   store.drawAlgorithm.allocateSeededTeams();
 
   initGroupsDisplay();
   store.drawCount = 0;
 
+  drawState = {
+    isPaused: false,
+    isComplete: false,
+    pendingPause: false,
+    phase: 'idle',
+    flashControl: null,
+    flyControl: null,
+    nextTimer: null,
+  };
+
   document.getElementById('reset-draw-btn').disabled = false;
   document.getElementById('final-export-btn').disabled = true;
   document.getElementById('export-btn').disabled = true;
 
-  renderDrawResultTable();
+  btn.innerHTML = '<span class="btn-icon">⏸️</span>暂停抽签';
+  btn.className = 'btn btn-warning btn-large';
 
+  renderDrawResultTable();
   renderSeededTeams(store.drawAlgorithm.getGroups());
 
-  // Start sequential animated draw
   drawNextTeam();
 }
 
@@ -183,50 +222,60 @@ function drawNextTeam() {
     return;
   }
 
-  const result = store.drawAlgorithm.drawOne();
-  if (!result) {
-    renderDrawResultTable();
-    updateDrawStatus();
-    finishDraw();
-    return;
-  }
-
-  store.drawCount++;
-  result.team.group = result.groupIndex + 1;
+  if (drawState && drawState.isPaused) return;
 
   const slot = document.getElementById('draw-slot');
   slot.classList.add('active');
 
-  // Phase 1: Flash random team names
-  flashRandomNames({
+  drawState.phase = 'flashing';
+
+  // Phase 1: 闪烁随机队名
+  drawState.flashControl = flashRandomNames({
     displayEl: slot,
     teams: store.teamsData,
     renderFn: (t) => `<span class="slot-team">${escapeHtml(t.teamName)}</span>`,
     interval: 60,
     duration: 600,
-    guardFn: () => !!store.drawAlgorithm,
+    guardFn: () => drawState && !drawState.isPaused,
     onSelect: () => {
-      // Phase 2: Show selected team
-      slot.innerHTML = `<span class="slot-team slot-team-highlight">${escapeHtml(result.team.teamName)}</span>
-        <span class="slot-group">→ ${getGroupLabel(result.groupIndex)}</span>`;
+      if (!drawState || drawState.isPaused) return;
 
-      // Phase 3: Fly animation to group card
+      // 在闪烁结束后才从算法中抽取队伍，避免暂停时丢失数据
+      const result = store.drawAlgorithm.drawOne();
+      if (!result) {
+        renderDrawResultTable();
+        updateDrawStatus();
+        finishDraw();
+        return;
+      }
+
+      store.drawCount++;
+      result.team.group = result.groupIndex + 1;
+
+      drawState.phase = 'selected';
+
+      // Phase 2: 显示选中的队伍和分组（独立 span，无箭头/br）
+      slot.innerHTML = `<span class="slot-team slot-team-highlight">${escapeHtml(result.team.teamName)}</span><span class="slot-group">${getGroupLabel(result.groupIndex)}组</span>`;
+
+      // Phase 3: 飞行动画到分组卡片
       requestAnimationFrame(() => {
         const targetCard = document.getElementById(`group-${result.groupIndex}`);
         const targetBody = document.getElementById(`group-body-${result.groupIndex}`);
 
         if (!targetCard || !targetBody) {
-          setTimeout(drawNextTeam, 200);
+          drawState.nextTimer = setTimeout(drawNextTeam, 200);
           return;
         }
 
-        flyElement({
+        drawState.flyControl = flyElement({
           source: slot,
           target: targetCard,
           text: result.team.teamName,
           highlightTarget: targetCard,
-          guardFn: () => !!store.drawAlgorithm,
+          guardFn: () => !!drawState,
           onLand: () => {
+            if (!drawState) return;
+
             const item = createTeamItem(result.team);
             item.style.animation = 'teamAppear 0.35s ease';
             targetBody.appendChild(item);
@@ -240,7 +289,20 @@ function drawNextTeam() {
             addDrawResultRow(result.team, result.team.drawOrder);
             updateDrawStatus();
 
-            setTimeout(drawNextTeam, 200);
+            drawState.phase = 'idle';
+
+            if (drawState.pendingPause) {
+              drawState.pendingPause = false;
+              drawState.isPaused = true;
+              slot.classList.remove('active');
+              slot.innerHTML = IDLE_SLOT_HTML;
+              const pauseBtn = document.getElementById('start-draw-btn');
+              pauseBtn.innerHTML = '<span class="btn-icon">▶️</span>继续抽签';
+              pauseBtn.className = 'btn btn-primary btn-large';
+              return;
+            }
+
+            drawState.nextTimer = setTimeout(drawNextTeam, 200);
           }
         });
       });
@@ -255,12 +317,20 @@ export function finishDraw() {
     store.projectsData[store.currentProject].drawCompleted = true;
   }
 
+  if (drawState) {
+    drawState.isComplete = true;
+    drawState.phase = 'idle';
+  }
+
   const slot = document.getElementById('draw-slot');
   slot.classList.remove('active');
   slot.innerHTML = '<span class="slot-team">✓ 抽签完成！</span>';
 
-  updateStartButton('开始抽签');
-  document.getElementById('start-draw-btn').disabled = true;
+  const btn = document.getElementById('start-draw-btn');
+  btn.innerHTML = '<span class="btn-icon">✅</span>抽签完成';
+  btn.className = 'btn btn-success btn-large';
+  btn.disabled = true;
+
   document.getElementById('reset-draw-btn').disabled = false;
   document.getElementById('final-export-btn').disabled = false;
   document.getElementById('export-btn').disabled = false;
@@ -289,9 +359,9 @@ export function resetDraw() {
     });
 
     store.drawAlgorithm = null;
+    drawState = null;
 
     initGroupsDisplay();
-
     renderDrawResultTable();
 
     eventBus.emit('renderTeamTable');
@@ -303,8 +373,11 @@ export function resetDraw() {
     slot.innerHTML = IDLE_SLOT_HTML;
     updateDrawStatus();
 
-    updateStartButton('开始抽签');
-    document.getElementById('start-draw-btn').disabled = false;
+    const btn = document.getElementById('start-draw-btn');
+    btn.innerHTML = '<span class="btn-icon">🎰</span>开始抽签';
+    btn.className = 'btn btn-success btn-large';
+    btn.disabled = false;
+
     document.getElementById('reset-draw-btn').disabled = true;
     document.getElementById('final-export-btn').disabled = true;
     document.getElementById('export-btn').disabled = true;
