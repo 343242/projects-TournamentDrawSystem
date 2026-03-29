@@ -934,11 +934,11 @@ body {
   grid-template-columns: 1.5fr 1fr;
   gap: 20px;
   min-height: 0;
+  align-items: start;
 }
 
 .draw-left {
   overflow-y: auto;
-  max-height: 700px;
 }
 
 .draw-right {
@@ -1103,16 +1103,15 @@ body {
 }
 
 .group-body {
-  padding: 10px;
-  min-height: 100px;
+  padding: 6px 8px;
 }
 
 .team-item {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 8px 10px;
-  margin-bottom: 5px;
+  padding: 5px 8px;
+  margin-bottom: 3px;
   background: var(--gray-100);
   border-radius: 6px;
   font-size: 0.85rem;
@@ -1165,26 +1164,39 @@ body {
 .team-item .team-info {
   flex: 1;
   min-width: 0;
-}
-
-.team-item .team-id {
-  color: var(--gray-400);
-  font-size: 0.75rem;
-  margin-right: 5px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
 }
 
 .team-item .team-name {
   color: var(--gray-700);
   font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex-shrink: 1;
+  min-width: 0;
 }
 
 .team-item .school-name {
   color: var(--gray-400);
   font-size: 0.75rem;
-  margin-top: 2px;
+  white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  white-space: nowrap;
+  flex-shrink: 1;
+  min-width: 0;
+}
+
+/* Placeholder slot for pre-sized group cards */
+.team-slot-empty {
+  padding: 5px 8px;
+  margin-bottom: 3px;
+  border-radius: 6px;
+  background: transparent;
+  border: 1px dashed var(--gray-200);
+  min-height: 16px;
 }
 
 .team-item.seeded {

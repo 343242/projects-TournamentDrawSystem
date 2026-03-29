@@ -11,6 +11,26 @@ const getGroupLabel = (i) => String.fromCharCode(65 + i);
 
 const IDLE_SLOT_HTML = '<span class="slot-text">等待抽签</span>';
 
+// Calculate per-group team capacity (matches DrawAlgorithm distribution)
+function calcGroupCapacities(totalTeams, groupCount) {
+  if (totalTeams === 0 || groupCount === 0) return [];
+  const baseCount = Math.floor(totalTeams / groupCount);
+  const remainder = totalTeams % groupCount;
+  return Array.from({ length: groupCount }, (_, i) =>
+    baseCount + (i < remainder ? 1 : 0)
+  );
+}
+
+// Replace first empty placeholder slot with actual team item
+function insertTeamItem(body, item) {
+  const slot = body.querySelector('.team-slot-empty');
+  if (slot) {
+    slot.replaceWith(item);
+  } else {
+    body.appendChild(item);
+  }
+}
+
 // 抽签动画状态（类似 order-page 的 drawOrderState）
 let drawState = null;
 
@@ -19,17 +39,28 @@ export function initGroupsDisplay() {
   container.innerHTML = '';
 
   const groupCount = parseInt(document.getElementById('group-count').value) || DEFAULT_GROUP_COUNT;
+  const totalTeams = store.teamsData.length;
+  const capacities = calcGroupCapacities(totalTeams, groupCount);
 
   for (let i = 0; i < groupCount; i++) {
     const card = document.createElement('div');
     card.className = 'group-card';
     card.id = `group-${i}`;
     const label = getGroupLabel(i);
+    const capacity = capacities[i] || 0;
     card.innerHTML = `
       <div class="group-header"><span class="group-letter">${label}</span><span class="group-count" id="group-count-${i}">0 支队伍</span></div>
       <div class="group-body" id="group-body-${i}"></div>
     `;
     container.appendChild(card);
+
+    // Pre-create placeholder slots matching expected team capacity
+    const body = card.querySelector('.group-body');
+    for (let j = 0; j < capacity; j++) {
+      const slot = document.createElement('div');
+      slot.className = 'team-slot-empty';
+      body.appendChild(slot);
+    }
   }
 }
 
@@ -101,10 +132,9 @@ function renderSeededTeams(groups) {
   groups.forEach(group => {
     const body = document.getElementById(`group-body-${group.index - 1}`);
     if (body) {
-      body.innerHTML = '';
       group.teams.forEach(team => {
         team.group = group.index;
-        body.appendChild(createTeamItem(team));
+        insertTeamItem(body, createTeamItem(team));
         seededTeams.push(team);
       });
     }
@@ -205,9 +235,8 @@ export function createTeamItem(team) {
   item.className = 'team-item' + (team.isSeeded ? ' seeded' : '');
   item.innerHTML = `
     <div class="team-info">
-      <span class="team-id">#${escapeHtml(String(team.id))}</span>
       <span class="team-name">${escapeHtml(team.teamName)}</span>
-      <div class="school-name">${escapeHtml(team.school)}</div>
+      <span class="school-name">${escapeHtml(team.school)}</span>
     </div>
     ${team.isSeeded ? '<span class="seed-badge">种子</span>' : ''}
   `;
@@ -278,7 +307,7 @@ function drawNextTeam() {
 
             const item = createTeamItem(result.team);
             item.style.animation = 'teamAppear 0.35s ease';
-            targetBody.appendChild(item);
+            insertTeamItem(targetBody, item);
 
             const countEl = document.getElementById(`group-count-${result.groupIndex}`);
             if (countEl) {
