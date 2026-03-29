@@ -1,12 +1,15 @@
 // 带输入框的弹窗（用于分组数量设置等场景）
-export function showPromptDialog(message, defaultValue, onConfirm) {
+export function showPromptDialog(message, defaultValue, onConfirm, hint) {
   const dialog = document.getElementById('prompt-dialog');
   const msgEl = document.getElementById('prompt-message');
+  const hintEl = document.getElementById('prompt-hint');
   const inputEl = document.getElementById('prompt-input');
   const confirmBtn = document.getElementById('prompt-confirm');
   const cancelBtn = document.getElementById('prompt-cancel');
 
   msgEl.textContent = message;
+  hintEl.textContent = hint || '';
+  hintEl.style.display = hint ? 'block' : 'none';
   inputEl.value = defaultValue || '';
   dialog.classList.remove('hidden');
   inputEl.focus();

@@ -11,6 +11,37 @@ const getGroupLabel = (i) => String.fromCharCode(65 + i);
 
 const IDLE_SLOT_HTML = '<span class="slot-text">等待抽签</span>';
 
+// Measure fixed team-item width from rendered text of all team names and schools
+function measureTeamItemWidth() {
+  if (store.teamsData.length === 0) return 120;
+
+  const measurer = document.createElement('div');
+  measurer.style.cssText = 'position:absolute;visibility:hidden;white-space:nowrap;font-family:"Microsoft YaHei","PingFang SC",sans-serif;padding:0;';
+  document.body.appendChild(measurer);
+
+  let maxContentWidth = 0;
+
+  store.teamsData.forEach(team => {
+    // Measure team-name (font-weight: 500, font-size: 0.85rem)
+    measurer.style.fontSize = '0.85rem';
+    measurer.style.fontWeight = '500';
+    measurer.textContent = team.teamName;
+    maxContentWidth = Math.max(maxContentWidth, measurer.offsetWidth);
+
+    // Measure school-name (font-size: 0.75rem)
+    measurer.style.fontSize = '0.75rem';
+    measurer.style.fontWeight = '400';
+    measurer.textContent = team.school;
+    maxContentWidth = Math.max(maxContentWidth, measurer.offsetWidth);
+  });
+
+  document.body.removeChild(measurer);
+
+  // Add padding (5px * 2 = 10px) + seed-badge space (36px if any seeded) + margin
+  const hasSeeded = store.teamsData.some(t => t.isSeeded);
+  return maxContentWidth + 10 + (hasSeeded ? 36 : 0);
+}
+
 // Calculate per-group team capacity (matches DrawAlgorithm distribution)
 function calcGroupCapacities(totalTeams, groupCount) {
   if (totalTeams === 0 || groupCount === 0) return [];
@@ -42,6 +73,12 @@ export function initGroupsDisplay() {
   const groupCount = project?.groupCount || DEFAULT_GROUP_COUNT;
   const totalTeams = store.teamsData.length;
   const capacities = calcGroupCapacities(totalTeams, groupCount);
+
+  // Measure and set fixed team-item width as CSS variable
+  if (totalTeams > 0) {
+    const itemWidth = measureTeamItemWidth();
+    container.style.setProperty('--team-item-width', itemWidth + 'px');
+  }
 
   for (let i = 0; i < groupCount; i++) {
     const card = document.createElement('div');

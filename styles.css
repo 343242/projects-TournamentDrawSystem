@@ -513,6 +513,13 @@ body {
   box-shadow: 0 0 0 3px rgba(95, 114, 189, 0.1);
 }
 
+.prompt-hint {
+  font-size: 0.85rem;
+  color: var(--gray-500);
+  margin-bottom: 10px;
+  text-align: center;
+}
+
 .project-card {
   background: var(--gray-100);
   border-radius: var(--border-radius);
@@ -1134,6 +1141,9 @@ body {
 
 .group-body {
   padding: 6px 8px;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(var(--team-item-width, 120px), 1fr));
+  gap: 3px;
 }
 
 .team-item {
@@ -1141,7 +1151,6 @@ body {
   justify-content: space-between;
   align-items: center;
   padding: 5px 8px;
-  margin-bottom: 3px;
   background: var(--gray-100);
   border-radius: 6px;
   font-size: 0.85rem;
@@ -1195,38 +1204,33 @@ body {
   flex: 1;
   min-width: 0;
   display: flex;
-  align-items: center;
-  gap: 6px;
+  flex-direction: column;
+  gap: 1px;
 }
 
 .team-item .team-name {
   color: var(--gray-700);
-  font-weight: 500;
+  font-weight: 600;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  flex-shrink: 1;
-  min-width: 0;
 }
 
 .team-item .school-name {
   color: var(--gray-400);
-  font-size: 0.75rem;
+  font-size: 0.7rem;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  flex-shrink: 1;
-  min-width: 0;
 }
 
 /* Placeholder slot for pre-sized group cards */
 .team-slot-empty {
   padding: 5px 8px;
-  margin-bottom: 3px;
   border-radius: 6px;
   background: transparent;
   border: 1px dashed var(--gray-200);
-  min-height: 16px;
+  min-height: 34px;
 }
 
 .team-item.seeded {

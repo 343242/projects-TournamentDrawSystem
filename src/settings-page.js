@@ -40,19 +40,20 @@ export function updateGroupCount() {
   }
 
   const currentCount = store.projectsData[store.currentProject]?.groupCount || DEFAULT_GROUP_COUNT;
-  const maxGroups = store.teamsData.length;
+  const totalTeams = store.teamsData.length;
+  const maxGroups = Math.min(MAX_GROUP_COUNT, Math.floor(totalTeams / 2));
 
   showPromptDialog(
-    `请输入分组数量 (${MIN_GROUP_COUNT} ~ ${Math.min(MAX_GROUP_COUNT, maxGroups)})`,
+    `请输入分组数量 (${MIN_GROUP_COUNT} ~ ${maxGroups})`,
     currentCount,
     (value) => {
       const groupCount = parseInt(value) || 0;
 
-      if (groupCount < MIN_GROUP_COUNT || groupCount > MAX_GROUP_COUNT) {
-        showAlertDialog(`分组数量需在 ${MIN_GROUP_COUNT} ~ ${MAX_GROUP_COUNT} 之间`);
+      if (groupCount < MIN_GROUP_COUNT || groupCount > maxGroups) {
+        showAlertDialog(`分组数量需在 ${MIN_GROUP_COUNT} ~ ${maxGroups} 之间`);
         return;
       }
-      if (groupCount > store.teamsData.length) {
+      if (groupCount > totalTeams) {
         showAlertDialog('分组数量不能超过队伍数量');
         return;
       }
@@ -77,7 +78,8 @@ export function updateGroupCount() {
 
       renderProjectList();
       eventBus.emit('groupCountUpdated');
-    }
+    },
+    `每组至少需要 2 支队伍`
   );
 }
 
