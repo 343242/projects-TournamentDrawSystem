@@ -1,6 +1,6 @@
 // 抽签设置页面逻辑
 
-import { store, DEFAULT_GROUP_COUNT, MIN_GROUP_COUNT, MAX_GROUP_COUNT } from './store.js';
+import { store, DEFAULT_GROUP_COUNT, MIN_GROUP_COUNT } from './store.js';
 import { showAlertDialog, showPromptDialog } from './dialog.js';
 import { updateNavigationState, updatePageHeaders } from './navigation.js';
 import { escapeHtml } from './utils.js';
@@ -41,20 +41,20 @@ export function updateGroupCount() {
 
   const currentCount = store.projectsData[store.currentProject]?.groupCount || DEFAULT_GROUP_COUNT;
   const totalTeams = store.teamsData.length;
-  const maxGroups = Math.min(MAX_GROUP_COUNT, Math.floor(totalTeams / 2));
 
   showPromptDialog(
-    `请输入分组数量 (${MIN_GROUP_COUNT} ~ ${maxGroups})`,
+    '请输入分组数量',
     currentCount,
     (value) => {
       const groupCount = parseInt(value) || 0;
 
-      if (groupCount < MIN_GROUP_COUNT || groupCount > maxGroups) {
-        showAlertDialog(`分组数量需在 ${MIN_GROUP_COUNT} ~ ${maxGroups} 之间`);
+      if (groupCount < MIN_GROUP_COUNT) {
+        showAlertDialog(`至少需要 ${MIN_GROUP_COUNT} 个分组`);
         return;
       }
-      if (groupCount > totalTeams) {
-        showAlertDialog('分组数量不能超过队伍数量');
+      const maxGroups = Math.floor(totalTeams / 2);
+      if (groupCount > maxGroups) {
+        showAlertDialog(`每组至少需要 2 支队伍，最多可分为 ${maxGroups} 组`);
         return;
       }
 
@@ -78,8 +78,7 @@ export function updateGroupCount() {
 
       renderProjectList();
       eventBus.emit('groupCountUpdated');
-    },
-    `每组至少需要 2 支队伍`
+    }
   );
 }
 
