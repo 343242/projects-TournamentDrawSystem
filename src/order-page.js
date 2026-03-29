@@ -5,84 +5,7 @@ import { showAlertDialog } from './dialog.js';
 import { updateNavigationState } from './navigation.js';
 import { shuffleArray, escapeHtml } from './utils.js';
 import { eventBus } from './events.js';
-
-const FLY_DURATION = 600;
-
-function flyToOrderTable(team, orderNum, statusText, tbody, state, onDone) {
-  const sourceRect = statusText.getBoundingClientRect();
-  const tableContainer = tbody.closest('.table-container');
-
-  let targetX, targetY;
-  const lastRow = tbody.lastElementChild;
-
-  if (lastRow) {
-    const lastRowRect = lastRow.getBoundingClientRect();
-    targetX = lastRowRect.left + lastRowRect.width / 2;
-    targetY = lastRowRect.bottom + lastRowRect.height / 2;
-  } else {
-    const tbodyRect = tbody.getBoundingClientRect();
-    targetX = tbodyRect.left + tbodyRect.width / 2;
-    targetY = tbodyRect.top + 30;
-  }
-
-  if (tableContainer) {
-    const containerRect = tableContainer.getBoundingClientRect();
-    targetY = Math.max(containerRect.top + 20, Math.min(targetY, containerRect.bottom - 20));
-  }
-
-  const flyer = document.createElement('div');
-  flyer.className = 'team-flyer';
-  flyer.textContent = team.teamName;
-
-  Object.assign(flyer.style, {
-    position: 'fixed',
-    left: (sourceRect.left + sourceRect.width / 2) + 'px',
-    top: (sourceRect.top + sourceRect.height / 2) + 'px',
-    transform: 'translate(-50%, -50%) scale(1)',
-    opacity: '1',
-  });
-
-  document.body.appendChild(flyer);
-  flyer.offsetHeight; // force reflow
-
-  const startX = sourceRect.left + sourceRect.width / 2;
-  const startY = sourceRect.top + sourceRect.height / 2;
-  const distance = Math.sqrt((targetX - startX) ** 2 + (targetY - startY) ** 2);
-  const duration = Math.max(300, Math.min(800, distance * 0.8));
-
-  Object.assign(flyer.style, {
-    left: targetX + 'px',
-    top: targetY + 'px',
-    transform: 'translate(-50%, -50%) scale(0.6)',
-    opacity: '1',
-    transition: `all ${duration}ms cubic-bezier(0.0, 0.0, 0.2, 1)`,
-  });
-
-  if (state) state.flyTimer = setTimeout(() => {
-    if (!store.drawOrderState) { flyer.remove(); return; }
-    flyer.remove();
-
-    const tr = document.createElement('tr');
-    tr.style.animation = 'teamAppear 0.35s ease';
-    tr.innerHTML = `
-      <td><strong>${orderNum}</strong></td>
-      <td>${escapeHtml(team.teamName)}</td>
-      <td>${escapeHtml(team.school)}</td>
-      <td class="${team.isSeeded ? 'seeded' : ''}">${team.isSeeded ? '是' : '-'}</td>
-    `;
-    tbody.appendChild(tr);
-
-    tr.addEventListener('animationend', () => {
-      tr.style.animation = '';
-    }, { once: true });
-
-    if (tableContainer) {
-      tableContainer.scrollTo({ top: tableContainer.scrollHeight, behavior: 'smooth' });
-    }
-
-    if (onDone) onDone();
-  }, duration);
-}
+import { flyElement, flashRandomNames } from './animation.js';
 
 export function generateOrder() {
   if (store.teamsData.length === 0) {
@@ -103,7 +26,7 @@ export function generateOrder() {
 
     state.isPaused = true;
     state.phase = 'idle';
-    clearInterval(state.flashInterval);
+    if (state.flashControl) state.flashControl.cancel();
     state.statusText.textContent = '等待开始抽签';
     state.statusText.classList.remove('flash-rolling', 'flash-selected');
     state.statusText.style.transform = '';
@@ -146,9 +69,8 @@ export function generateOrder() {
       seededTeams,
       nonSeededTeams,
       currentIndex: startIndex,
-      flashInterval: null,
-      flashTimer: null,
-      flyTimer: null,
+      flashControl: null,
+      flyControl: null,
       nextTimer: null,
       isPaused: false,
       isComplete: false,
@@ -200,9 +122,8 @@ export function generateOrder() {
     seededTeams,
     nonSeededTeams,
     currentIndex: 0,
-    flashInterval: null,
-    flashTimer: null,
-    flyTimer: null,
+    flashControl: null,
+    flyControl: null,
     nextTimer: null,
     isPaused: false,
     isComplete: false,
@@ -228,7 +149,7 @@ export function drawNextFromState() {
   if (!state || state.isPaused || state.isComplete) return;
 
   if (state.currentIndex >= state.drawSequence.length) {
-    clearInterval(state.flashInterval);
+    if (state.flashControl) state.flashControl.cancel();
     state.isComplete = true;
     state.phase = 'idle';
     state.statusLabel.textContent = `共 ${state.drawSequence.length} 支`;
@@ -265,57 +186,108 @@ export function drawNextFromState() {
 
   state.phase = 'flashing';
 
-  function flashRandomName() {
-    if (state.isPaused) return;
-    const randomTeam = store.teamsData[Math.floor(Math.random() * store.teamsData.length)];
-    state.statusText.textContent = randomTeam.teamName;
-    state.statusText.classList.add('flash-rolling');
-  }
+  state.flashControl = flashRandomNames({
+    displayEl: state.statusText,
+    teams: store.teamsData,
+    renderFn: (t) => {
+      state.statusText.textContent = t.teamName;
+      state.statusText.classList.add('flash-rolling');
+    },
+    interval: 60,
+    duration: 800,
+    guardFn: () => !state.isPaused,
+    onSelect: () => {
+      state.phase = 'selected';
 
-  state.flashInterval = setInterval(flashRandomName, 60);
+      state.statusText.textContent = team.teamName;
+      state.statusText.classList.remove('flash-rolling');
+      state.statusText.classList.add('flash-selected');
 
-  state.flashTimer = setTimeout(() => {
-    if (state.isPaused) return;
-    clearInterval(state.flashInterval);
-
-    state.phase = 'selected';
-
-    state.statusText.textContent = team.teamName;
-    state.statusText.classList.remove('flash-rolling');
-    state.statusText.classList.add('flash-selected');
-
-    flyToOrderTable(team, orderNum, state.statusText, state.tbody, state, () => {
-      if (!store.drawOrderState) return;
-      state.statusText.classList.remove('flash-selected');
-      state.statusText.style.transform = '';
-      state.statusText.style.color = '';
-      state.statusText.style.textShadow = '';
-
-      // Assign drawOrder now that this team's animation is complete
-      team.drawOrder = orderNum;
-
-      state.currentIndex++;
-      state.phase = 'idle';
-
-      // Save progress to project
-      const proj = store.currentProject ? store.projectsData[store.currentProject] : null;
-      if (proj) {
-        proj.drawOrderProgress = state.currentIndex;
+      // Calculate fly target position
+      const lastRow = state.tbody.lastElementChild;
+      let targetX, targetY;
+      if (lastRow) {
+        const r = lastRow.getBoundingClientRect();
+        targetX = r.left + r.width / 2;
+        targetY = r.bottom + r.height / 2;
+      } else {
+        const r = state.tbody.getBoundingClientRect();
+        targetX = r.left + r.width / 2;
+        targetY = r.top + 30;
       }
 
-      if (state.pendingPause) {
-        state.pendingPause = false;
-        state.isPaused = true;
-        state.statusText.textContent = '等待开始抽签';
-        const btn = document.getElementById('generate-order-btn');
-        btn.innerHTML = '<span class="btn-icon">▶️</span>继续抽签';
-        btn.className = 'btn btn-primary btn-large';
-        return;
+      const tableContainer = state.tbody.closest('.table-container');
+      if (tableContainer) {
+        const cr = tableContainer.getBoundingClientRect();
+        targetY = Math.max(cr.top + 20, Math.min(targetY, cr.bottom - 20));
       }
 
-      state.nextTimer = setTimeout(drawNextFromState, 300);
-    });
-  }, 800);
+      // Dynamic duration based on distance
+      const sourceRect = state.statusText.getBoundingClientRect();
+      const startX = sourceRect.left + sourceRect.width / 2;
+      const startY = sourceRect.top + sourceRect.height / 2;
+      const distance = Math.sqrt((targetX - startX) ** 2 + (targetY - startY) ** 2);
+      const flyDuration = Math.max(300, Math.min(800, distance * 0.8));
+
+      state.flyControl = flyElement({
+        source: state.statusText,
+        targetX,
+        targetY,
+        text: team.teamName,
+        duration: flyDuration,
+        easing: 'cubic-bezier(0.0, 0.0, 0.2, 1)',
+        scale: 0.6,
+        guardFn: () => !!store.drawOrderState,
+        onLand: () => {
+          if (!store.drawOrderState) return;
+          state.statusText.classList.remove('flash-selected');
+          state.statusText.style.transform = '';
+          state.statusText.style.color = '';
+          state.statusText.style.textShadow = '';
+
+          const tr = document.createElement('tr');
+          tr.style.animation = 'teamAppear 0.35s ease';
+          tr.innerHTML = `
+            <td><strong>${orderNum}</strong></td>
+            <td>${escapeHtml(team.teamName)}</td>
+            <td>${escapeHtml(team.school)}</td>
+            <td class="${team.isSeeded ? 'seeded' : ''}">${team.isSeeded ? '是' : '-'}</td>
+          `;
+          state.tbody.appendChild(tr);
+
+          tr.addEventListener('animationend', () => {
+            tr.style.animation = '';
+          }, { once: true });
+
+          if (tableContainer) {
+            tableContainer.scrollTo({ top: tableContainer.scrollHeight, behavior: 'smooth' });
+          }
+
+          team.drawOrder = orderNum;
+
+          state.currentIndex++;
+          state.phase = 'idle';
+
+          const proj = store.currentProject ? store.projectsData[store.currentProject] : null;
+          if (proj) {
+            proj.drawOrderProgress = state.currentIndex;
+          }
+
+          if (state.pendingPause) {
+            state.pendingPause = false;
+            state.isPaused = true;
+            state.statusText.textContent = '等待开始抽签';
+            const btn = document.getElementById('generate-order-btn');
+            btn.innerHTML = '<span class="btn-icon">▶️</span>继续抽签';
+            btn.className = 'btn btn-primary btn-large';
+            return;
+          }
+
+          state.nextTimer = setTimeout(drawNextFromState, 300);
+        }
+      });
+    }
+  });
 }
 
 export function renderOrderTable() {
@@ -361,7 +333,7 @@ export function pauseOrderDraw() {
 
   state.isPaused = true;
   state.phase = 'idle';
-  clearInterval(state.flashInterval);
+  if (state.flashControl) state.flashControl.cancel();
   state.statusText.textContent = '等待开始抽签';
   state.statusText.classList.remove('flash-rolling', 'flash-selected');
   state.statusText.style.transform = '';
@@ -387,13 +359,11 @@ export function stopOrderAnimation() {
       project.drawOrderProgress = state.currentIndex;
     }
 
-    clearInterval(state.flashInterval);
-    clearTimeout(state.flashTimer);
-    clearTimeout(state.flyTimer);
+    if (state.flashControl) state.flashControl.cancel();
+    if (state.flyControl) state.flyControl.cancel();
     clearTimeout(state.nextTimer);
-    state.flashInterval = null;
-    state.flashTimer = null;
-    state.flyTimer = null;
+    state.flashControl = null;
+    state.flyControl = null;
     state.nextTimer = null;
     state.isPaused = true;
     state.isComplete = true;

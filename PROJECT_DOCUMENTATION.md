@@ -4,7 +4,7 @@
 
 **项目名称**: 大赛抽签系统 (Tournament Draw System)
 
-**核心功能**: 这是一个基于 Electron 桌面应用程序，用于大赛队伍分组抽签。系统可以导入 Excel 队伍数据（支持多 Sheet 多项目），支持种子队设置，带有抽签顺序动画（闪烁→选中→滑入表格），支持暂停/恢复，逐个抽签分配到分组，并导出结果。
+**核心功能**: 这是一个基于 Electron 桌面应用程序，用于大赛队伍分组抽签。系统可以导入 Excel 队伍数据（支持多 Sheet 多项目），支持种子队设置，带有抽签顺序动画（闪烁→选中→滑入表格）和分组抽签飞行动画（闪烁→选中→飞向分组卡片），支持暂停/恢复，逐个分配到分组，并导出结果。
 
 **技术栈**:
 - **框架**: Electron v37.3.1 - 跨平台桌面应用框架
@@ -58,7 +58,7 @@ TournamentDrawSystem/
 | `src/settings-page.js` | 设置页：队伍表格渲染、分组数量设置、项目列表渲染、项目切换 |
 | `src/order-page.js` | 抽签顺序页：动画状态机（idle→flashing→selected）、暂停/恢复 |
 | `src/file-ops.js` | 文件操作：Excel 导入导出、解析多 Sheet 数据 |
-| `src/draw-page.js` | 分组抽签页：左右分栏布局、分组卡片、逐个抽签动画、结果表格 |
+| `src/draw-page.js` | 分组抽签页：左右分栏布局、分组卡片、逐个飞行动画抽签、结果表格 |
 | `src/utils.js` | 工具函数：shuffleArray（Fisher-Yates 洗牌）、escapeHtml（XSS 防护） |
 
 ---
@@ -263,13 +263,14 @@ idle ──→ flashing ──→ selected ──→ idle（下一个队伍）
 │       └── .group-body (队伍列表)
 └── .draw-right
     ├── .draw-right-top (已抽签队伍表格)
-    │   └── table#draw-result-table (抽签顺序 | 参赛队伍 | 学校 | 种子队)
-    └── .draw-right-bottom (状态面板)
-        ├── .order-status-label (当前序号/总数)
-        ├── .order-status-box
-        │   ├── .draw-slot (抽签动画区域)
-        │   └── .order-status-count (剩余数)
-        └── .draw-actions (开始抽签 + 重新抽签)
+    │   └── table#draw-result-table (抽签顺序 | 参赛队伍 | 种子队 | 分组)
+    ├── .draw-right-bottom (状态面板，浅蓝紫渐变背景)
+    │   ├── .order-status-label (当前序号/总数)
+    │   ├── .order-status-box (浅蓝紫渐变背景)
+    │   │   ├── .draw-slot (抽签动画区域)
+    │   │   └── .order-status-count (剩余数，深灰色文字)
+    │   └── .draw-actions (开始抽签 + 重新抽签)
+    └── .draw-page-footer (上一步 + 导出结果)
 ```
 
 **分组卡片**:
@@ -322,13 +323,33 @@ idle ──→ flashing ──→ selected ──→ idle（下一个队伍）
 **应用位置**（渲染时转义，不修改原始数据）:
 - `src/settings-page.js`: `renderTeamTable()`, `renderProjectList()`
 - `src/order-page.js`: `flyToOrderTable()`, `renderOrderTable()`
-- `src/draw-page.js`: `createTeamItem()`, `performDraw()`, `addDrawResultRow()`, `renderDrawResultTable()`
+- `src/draw-page.js`: `createTeamItem()`, `drawNextTeam()`, `addDrawResultRow()`, `renderDrawResultTable()`
 
 ### 4.10 结果导出模块
 
 **模块**: `src/file-ops.js` → `exportResult()`
 
 **导出格式**: `[['分组号', '队伍代号', '参赛队伍', '学校', '种子队']]`
+
+### 4.11 分组抽签动画系统
+
+**动画流程**（`src/draw-page.js` → `drawNextTeam()`）:
+
+点击"开始抽签"后，系统自动执行逐个队伍的动画抽签流程：
+
+| 阶段 | 行为 | 持续时间 |
+|------|------|----------|
+| 闪烁 | draw-slot 中 60ms 间隔随机闪烁队伍名称 | 600ms |
+| 选中 | 停在抽中队伍上，高亮显示（`slot-team-highlight`）+ 目标组标签 | 即时 |
+| 飞行 | 白色胶囊从 draw-slot 飞向目标分组卡片（ease-out 曲线） | 600ms |
+| 出现 | 队伍条目以缩放动画（`teamAppear`）出现在分组列表中 | 350ms |
+| 间隔 | 等待后进入下一支队伍 | 200ms |
+
+**安全守卫**: 每个 setTimeout 回调检查 `store.drawAlgorithm` 是否存在，防止重置/切换项目时旧定时器操作无效 DOM。
+
+**空闲状态**: 未开始抽签或重置后，draw-slot 统一显示 "抽签队伍" + "**等待抽签**"（`IDLE_SLOT_HTML` 常量），确保各处（初始 HTML、重置、项目切换、清除数据）内容一致。
+
+**状态面板样式**: draw-right-bottom 内的 `.order-status-box` 使用浅蓝紫渐变背景（`linear-gradient(135deg, #c2d1e8, #d1c4e9)`），状态计数文字使用深灰色（`var(--gray-600)`），与抽签顺序页面的深色背景区分。
 
 ---
 
@@ -355,12 +376,12 @@ idle ──→ flashing ──→ selected ──→ idle（下一个队伍）
     │   ├── .draw-left (分组卡片网格, max-height: 700px, overflow-y: auto)
     │   └── .draw-right (右侧面板)
     │       ├── .draw-right-top (已抽签队伍表格, max-height: 400px)
-    │       └── .draw-right-bottom (状态面板, 居中对齐)
-    │           ├── .order-status-label
-    │           ├── .order-status-box > .draw-slot
-    │           ├── .order-status-count
-    │           └── .draw-actions (开始抽签 + 重新抽签)
-    └── .page-footer (固定在页面底部)
+    │       ├── .draw-right-bottom (状态面板, 浅蓝紫渐变背景)
+    │       │   ├── .order-status-label
+    │       │   ├── .order-status-box > .draw-slot
+    │       │   ├── .order-status-count
+    │       │   └── .draw-actions (开始抽签 + 重新抽签)
+    │       └── .draw-page-footer (上一步 + 导出结果)
 ```
 
 ### 5.2 关键 CSS 动画
@@ -430,7 +451,8 @@ Excel 文件 (多 Sheet)
 │  draw-page.js: startDrawAnimation()    │
 │  - 构造 DrawAlgorithm                   │
 │  - allocateSeededTeams() 分配种子队      │
-│  - performDraw() 逐个分配                 │
+│  - drawNextTeam() 逐个动画抽签           │
+│    (闪烁→选中→飞行动画→分配到组)       │
 │  - 每次分配更新组队伍数显示             │
 └─────────────────────────────────────────┘
     │
@@ -560,11 +582,14 @@ npm run build # 构建发布包
 │  ┌─────────────────────────────────────────────────────┐    │
 │  │  ┌──────────────┐  ┌──────────────────────────┐      │    │
 │  │  │  左侧        │  │  右上: 已抽签表格     │      │    │
-│  │  │  A/B/C/D...   │  │  右下: 状态面板     │      │    │
+│  │  │  A/B/C/D...   │  │  右下: 状态面板(浅蓝紫) │      │    │
 │  │  │  分组卡片    │  │    + 开始/重新抽签   │      │    │
-│  │  │  + 队伍数    │  │                     │      │    │
+│  │  │  + 队伍数    │  │  底部: 上一步+导出  │      │    │
 │  │  └──────────────┘  └──────────────────────────┘      │    │
-│  │ 1. 点击"开始抽签"初始化（种子队已预分配）              │    │
+│  │ 1. 点击"开始抽签"启动动画抽签（种子队已预分配）        │    │
+│  │    - 状态框闪烁随机队伍名称                           │    │
+│  │    - 选中队伍后胶囊飞向目标分组卡片                   │    │
+│  │    - 逐个队伍依次抽签直到完成                       │    │
 │  │ 2. 点击"重新抽签"重置分组结果                       │    │
 │  │ 3. 查看分组结果（每组卡片展示队伍列表）                │    │
 │  │ 4. 右上表格实时显示已分配队伍                       │    │
@@ -610,6 +635,21 @@ npm run build # 构建发布包
 ---
 
 ## 11. 更新日志
+
+### v3.1.0 (2026-03-29)
+
+**分组抽签动画**:
+- 新增逐个队伍飞行动画抽签流程（`drawNextTeam()`）：闪烁随机名称(600ms) → 选中高亮 → 飞向分组卡片(600ms) → 队伍出现动画(350ms)
+- 替换原有的即时批量抽签（while 循环）为链式动画调用
+- 每个动画阶段均包含 `store.drawAlgorithm` 空值守卫，防止重置时旧定时器异常
+
+**Bug 修复**:
+- 修复 draw-slot 在空闲状态显示内容不统一的问题（统一使用 `IDLE_SLOT_HTML` 常量）
+- 修复抽签完成后"重新抽签"按钮仍为禁用状态的问题
+
+**UI 优化**:
+- draw-status-box 背景改为浅蓝紫渐变（`#c2d1e8 → #d1c4e9`），状态计数文字颜色调整为深灰
+- "上一步"和"导出结果"按钮从 page-footer 移入 draw-right 列底部（`draw-page-footer`），始终显示在状态面板下方
 
 ### v3.0.0 (2026-03-27)
 
@@ -714,7 +754,7 @@ npm run build # 构建发布包
 | 设置页面 | `src/settings-page.js` | 队伍表格、项目列表、项目切换 |
 | 抽签顺序 | `src/order-page.js` | 动画状态机、暂停/恢复、飞行动画 |
 | 文件操作 | `src/file-ops.js` | Excel 导入导出、解析 |
-| 分组抽签 | `src/draw-page.js` | 左右分栏、分组卡片、逐个抽签、结果表格 |
+| 分组抽签 | `src/draw-page.js` | 左右分栏、分组卡片、飞行动画抽签、结果表格 |
 | 抽签算法 | `draw-algorithm.js` | 分组逻辑、同校回避 |
 | 样式表 | `styles.css` | UI 样式、动画、布局、CSP |
 | 工具函数 | `src/utils.js` | shuffleArray、escapeHtml |
@@ -722,4 +762,4 @@ npm run build # 构建发布包
 
 ---
 
-*文档更新日期: 2026-03-27*
+*文档更新日期: 2026-03-29*

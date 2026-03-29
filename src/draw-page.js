@@ -4,6 +4,7 @@ import { store, DEFAULT_GROUP_COUNT } from './store.js';
 import { showAlertDialog, showConfirmDialog } from './dialog.js';
 import { escapeHtml } from './utils.js';
 import { eventBus } from './events.js';
+import { flyElement, flashRandomNames } from './animation.js';
 import DrawAlgorithm from '../draw-algorithm.js';
 
 const getGroupLabel = (i) => String.fromCharCode(65 + i);
@@ -174,89 +175,6 @@ export function createTeamItem(team) {
   return item;
 }
 
-const FLY_DURATION = 600;
-
-export function performDraw() {
-  if (!store.drawAlgorithm || store.drawCompleted) return null;
-
-  const result = store.drawAlgorithm.drawOne();
-
-  if (result) {
-    store.drawCount = (store.drawCount || 0) + 1;
-    result.team.group = result.groupIndex + 1;
-
-    const slot = document.getElementById('draw-slot');
-    slot.classList.add('active');
-    slot.innerHTML = `
-      <span class="slot-team slot-team-highlight">${escapeHtml(result.team.teamName)}</span>
-      <span class="slot-group">→ ${getGroupLabel(result.groupIndex)}</span>
-    `;
-
-    addDrawResultRow(result.team, result.team.drawOrder);
-    updateDrawStatus();
-
-    const countEl = document.getElementById(`group-count-${result.groupIndex}`);
-    if (countEl) {
-      const targetGroup = store.drawAlgorithm.getGroups()[result.groupIndex];
-      countEl.textContent = `${targetGroup.teams.length} 支队伍`;
-    }
-
-    requestAnimationFrame(() => {
-      animateTeamFly(result, slot);
-    });
-
-    if (store.drawAlgorithm.remainingTeams.length === 0) {
-      finishDraw();
-    }
-
-    return result;
-  }
-
-  return null;
-}
-
-function animateTeamFly(result, sourceSlot) {
-  const targetCard = document.getElementById(`group-${result.groupIndex}`);
-  const targetBody = document.getElementById(`group-body-${result.groupIndex}`);
-  if (!targetCard || !targetBody) return;
-
-  const sourceRect = sourceSlot.getBoundingClientRect();
-  const targetRect = targetCard.getBoundingClientRect();
-
-  const flyer = document.createElement('div');
-  flyer.className = 'team-flyer';
-  flyer.textContent = result.team.teamName;
-
-  Object.assign(flyer.style, {
-    position: 'fixed',
-    left: (sourceRect.left + sourceRect.width / 2) + 'px',
-    top: (sourceRect.top + sourceRect.height / 2) + 'px',
-    transform: 'translate(-50%, -50%) scale(1)',
-    opacity: '1',
-  });
-
-  document.body.appendChild(flyer);
-  flyer.offsetHeight;
-
-  targetCard.classList.add('fly-target');
-
-  Object.assign(flyer.style, {
-    left: (targetRect.left + targetRect.width / 2) + 'px',
-    top: (targetRect.top + targetRect.height / 2) + 'px',
-    transform: 'translate(-50%, -50%) scale(0.5)',
-    opacity: '1',
-    transition: `all ${FLY_DURATION}ms cubic-bezier(0.25, 0.46, 0.45, 0.94)`,
-  });
-
-  setTimeout(() => {
-    flyer.remove();
-    targetCard.classList.remove('fly-target');
-    const item = createTeamItem(result.team);
-    item.style.animation = 'teamAppear 0.35s ease';
-    targetBody.appendChild(item);
-  }, FLY_DURATION);
-}
-
 function drawNextTeam() {
   if (!store.drawAlgorithm || store.drawAlgorithm.remainingTeams.length === 0) {
     renderDrawResultTable();
@@ -280,80 +198,54 @@ function drawNextTeam() {
   slot.classList.add('active');
 
   // Phase 1: Flash random team names
-  const flashInterval = setInterval(() => {
-    if (!store.drawAlgorithm) { clearInterval(flashInterval); return; }
-    const randomTeam = store.teamsData[Math.floor(Math.random() * store.teamsData.length)];
-    slot.innerHTML = `<span class="slot-team">${escapeHtml(randomTeam.teamName)}</span>`;
-  }, 60);
+  flashRandomNames({
+    displayEl: slot,
+    teams: store.teamsData,
+    renderFn: (t) => `<span class="slot-team">${escapeHtml(t.teamName)}</span>`,
+    interval: 60,
+    duration: 600,
+    guardFn: () => !!store.drawAlgorithm,
+    onSelect: () => {
+      // Phase 2: Show selected team
+      slot.innerHTML = `<span class="slot-team slot-team-highlight">${escapeHtml(result.team.teamName)}</span>
+        <span class="slot-group">→ ${getGroupLabel(result.groupIndex)}</span>`;
 
-  // Phase 2: After flashing, show selected team and fly to group
-  setTimeout(() => {
-    clearInterval(flashInterval);
-    if (!store.drawAlgorithm) return;
+      // Phase 3: Fly animation to group card
+      requestAnimationFrame(() => {
+        const targetCard = document.getElementById(`group-${result.groupIndex}`);
+        const targetBody = document.getElementById(`group-body-${result.groupIndex}`);
 
-    slot.innerHTML = `<span class="slot-team slot-team-highlight">${escapeHtml(result.team.teamName)}</span>
-      <span class="slot-group">→ ${getGroupLabel(result.groupIndex)}</span>`;
-
-    // Phase 3: Fly animation to group card
-    requestAnimationFrame(() => {
-      const targetCard = document.getElementById(`group-${result.groupIndex}`);
-      const targetBody = document.getElementById(`group-body-${result.groupIndex}`);
-
-      if (!targetCard || !targetBody) {
-        setTimeout(drawNextTeam, 200);
-        return;
-      }
-
-      const sourceRect = slot.getBoundingClientRect();
-      const targetRect = targetCard.getBoundingClientRect();
-
-      const flyer = document.createElement('div');
-      flyer.className = 'team-flyer';
-      flyer.textContent = result.team.teamName;
-
-      Object.assign(flyer.style, {
-        position: 'fixed',
-        left: (sourceRect.left + sourceRect.width / 2) + 'px',
-        top: (sourceRect.top + sourceRect.height / 2) + 'px',
-        transform: 'translate(-50%, -50%) scale(1)',
-        opacity: '1',
-      });
-
-      document.body.appendChild(flyer);
-      flyer.offsetHeight;
-
-      targetCard.classList.add('fly-target');
-
-      Object.assign(flyer.style, {
-        left: (targetRect.left + targetRect.width / 2) + 'px',
-        top: (targetRect.top + targetRect.height / 2) + 'px',
-        transform: 'translate(-50%, -50%) scale(0.5)',
-        opacity: '1',
-        transition: `all ${FLY_DURATION}ms cubic-bezier(0.25, 0.46, 0.45, 0.94)`,
-      });
-
-      setTimeout(() => {
-        flyer.remove();
-        if (!store.drawAlgorithm) { targetCard.classList.remove('fly-target'); return; }
-        targetCard.classList.remove('fly-target');
-
-        const item = createTeamItem(result.team);
-        item.style.animation = 'teamAppear 0.35s ease';
-        targetBody.appendChild(item);
-
-        const countEl = document.getElementById(`group-count-${result.groupIndex}`);
-        if (countEl) {
-          const targetGroup = store.drawAlgorithm.getGroups()[result.groupIndex];
-          countEl.textContent = `${targetGroup.teams.length} 支队伍`;
+        if (!targetCard || !targetBody) {
+          setTimeout(drawNextTeam, 200);
+          return;
         }
 
-        addDrawResultRow(result.team, result.team.drawOrder);
-        updateDrawStatus();
+        flyElement({
+          source: slot,
+          target: targetCard,
+          text: result.team.teamName,
+          highlightTarget: targetCard,
+          guardFn: () => !!store.drawAlgorithm,
+          onLand: () => {
+            const item = createTeamItem(result.team);
+            item.style.animation = 'teamAppear 0.35s ease';
+            targetBody.appendChild(item);
 
-        setTimeout(drawNextTeam, 200);
-      }, FLY_DURATION);
-    });
-  }, 600);
+            const countEl = document.getElementById(`group-count-${result.groupIndex}`);
+            if (countEl) {
+              const targetGroup = store.drawAlgorithm.getGroups()[result.groupIndex];
+              countEl.textContent = `${targetGroup.teams.length} 支队伍`;
+            }
+
+            addDrawResultRow(result.team, result.team.drawOrder);
+            updateDrawStatus();
+
+            setTimeout(drawNextTeam, 200);
+          }
+        });
+      });
+    }
+  });
 }
 
 export function finishDraw() {
