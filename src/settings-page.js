@@ -1,7 +1,7 @@
 // 抽签设置页面逻辑
 
 import { store, DEFAULT_GROUP_COUNT, MIN_GROUP_COUNT, MAX_GROUP_COUNT } from './store.js';
-import { showAlertDialog } from './dialog.js';
+import { showAlertDialog, showPromptDialog } from './dialog.js';
 import { updateNavigationState, updatePageHeaders } from './navigation.js';
 import { escapeHtml } from './utils.js';
 import { stopOrderAnimation } from './order-page.js';
@@ -39,23 +39,46 @@ export function updateGroupCount() {
     return;
   }
 
-  const groupCount = parseInt(document.getElementById('group-count').value) || 0;
+  const currentCount = store.projectsData[store.currentProject]?.groupCount || DEFAULT_GROUP_COUNT;
+  const maxGroups = store.teamsData.length;
 
-  if (groupCount < MIN_GROUP_COUNT || groupCount > MAX_GROUP_COUNT) return;
-  if (store.teamsData.length > 0 && groupCount > store.teamsData.length) return;
+  showPromptDialog(
+    `请输入分组数量 (${MIN_GROUP_COUNT} ~ ${Math.min(MAX_GROUP_COUNT, maxGroups)})`,
+    currentCount,
+    (value) => {
+      const groupCount = parseInt(value) || 0;
 
-  if (store.currentProject && store.projectsData[store.currentProject]) {
-    store.projectsData[store.currentProject].groupCount = groupCount;
-    store.projectsData[store.currentProject].drawCompleted = false;
-  }
+      if (groupCount < MIN_GROUP_COUNT || groupCount > MAX_GROUP_COUNT) {
+        showAlertDialog(`分组数量需在 ${MIN_GROUP_COUNT} ~ ${MAX_GROUP_COUNT} 之间`);
+        return;
+      }
+      if (groupCount > store.teamsData.length) {
+        showAlertDialog('分组数量不能超过队伍数量');
+        return;
+      }
 
-  store.teamsData.forEach(team => {
-    team.group = 0;
-  });
+      if (store.currentProject && store.projectsData[store.currentProject]) {
+        store.projectsData[store.currentProject].groupCount = groupCount;
+        store.projectsData[store.currentProject].drawCompleted = false;
+        store.projectsData[store.currentProject].drawOrderGenerated = false;
+      }
 
-  store.drawAlgorithm = null;
-  store.drawCompleted = false;
-  renderProjectList();
+      store.teamsData.forEach(team => {
+        team.group = 0;
+        team.drawOrder = 0;
+      });
+
+      store.drawAlgorithm = null;
+      store.drawCompleted = false;
+
+      // Update display
+      const displayEl = document.getElementById('group-count-display');
+      if (displayEl) displayEl.textContent = groupCount;
+
+      renderProjectList();
+      eventBus.emit('groupCountUpdated');
+    }
+  );
 }
 
 export function renderProjectList() {

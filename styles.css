@@ -483,6 +483,36 @@ body {
   overflow-y: auto;
 }
 
+.group-count-display {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 50px;
+  padding: 8px 15px;
+  background: var(--gray-100);
+  border: 1px solid var(--gray-300);
+  border-radius: var(--border-radius);
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--primary-start);
+}
+
+.prompt-input {
+  width: 100%;
+  margin: 15px 0;
+  padding: 10px 15px;
+  border: 1px solid var(--gray-300);
+  border-radius: var(--border-radius);
+  font-size: 1.1rem;
+  text-align: center;
+  outline: none;
+}
+
+.prompt-input:focus {
+  border-color: var(--primary-start);
+  box-shadow: 0 0 0 3px rgba(95, 114, 189, 0.1);
+}
+
 .project-card {
   background: var(--gray-100);
   border-radius: var(--border-radius);

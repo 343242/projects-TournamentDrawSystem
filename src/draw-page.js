@@ -38,7 +38,8 @@ export function initGroupsDisplay() {
   const container = document.getElementById('groups-container');
   container.innerHTML = '';
 
-  const groupCount = parseInt(document.getElementById('group-count').value) || DEFAULT_GROUP_COUNT;
+  const project = store.projectsData[store.currentProject];
+  const groupCount = project?.groupCount || DEFAULT_GROUP_COUNT;
   const totalTeams = store.teamsData.length;
   const capacities = calcGroupCapacities(totalTeams, groupCount);
 
@@ -200,7 +201,8 @@ export function startDrawAnimation() {
   }
 
   // 全新开始
-  const groupCount = parseInt(document.getElementById('group-count').value) || DEFAULT_GROUP_COUNT;
+  const project = store.projectsData[store.currentProject];
+  const groupCount = project?.groupCount || DEFAULT_GROUP_COUNT;
   store.drawAlgorithm = new DrawAlgorithm(store.teamsData, groupCount);
   store.drawAlgorithm.allocateSeededTeams();
 

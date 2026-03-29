@@ -18,6 +18,11 @@ eventBus.on('renderProjectList', () => renderProjectList());
 eventBus.on('renderTeamTable', () => renderTeamTable());
 eventBus.on('generateOrder', () => generateOrder());
 eventBus.on('selectProject', (name) => selectProject(name));
+eventBus.on('groupCountUpdated', () => {
+  initGroupsDisplay();
+  renderDrawResultTable();
+  updateDrawStatus();
+});
 
 function updateUIForProject() {
   if (!store.currentProject) return;
@@ -29,17 +34,11 @@ function updateUIForProject() {
   document.getElementById('total-teams-display').textContent = project.teams.length;
 
   const groupCount = project.teams.length > 0 ? (project.groupCount || DEFAULT_GROUP_COUNT) : 0;
-  document.getElementById('group-count').value = groupCount;
+  const groupCountDisplay = document.getElementById('group-count-display');
+  if (groupCountDisplay) groupCountDisplay.textContent = project.teams.length > 0 ? groupCount : '-';
 
-  const groupCountInput = document.getElementById('group-count');
-  const groupCountBtn = groupCountInput?.nextElementSibling;
-  if (project.teams.length === 0) {
-    groupCountInput.disabled = true;
-    if (groupCountBtn) groupCountBtn.disabled = true;
-  } else {
-    groupCountInput.disabled = false;
-    if (groupCountBtn) groupCountBtn.disabled = false;
-  }
+  const groupCountBtn = document.querySelector('[data-action="update-group-count"]');
+  if (groupCountBtn) groupCountBtn.disabled = project.teams.length === 0;
 
   renderTeamTable();
 
@@ -92,6 +91,11 @@ function updateUIForProject() {
     document.getElementById('reset-draw-btn').disabled = false;
     document.getElementById('final-export-btn').disabled = false;
   } else {
+    if (project.groupCount > 0 && project.teams.length > 0) {
+      initGroupsDisplay();
+    } else {
+      document.getElementById('groups-container').innerHTML = '';
+    }
     renderDrawResultTable();
     updateDrawStatus();
     document.getElementById('draw-slot').classList.remove('active');
@@ -99,7 +103,6 @@ function updateUIForProject() {
     document.getElementById('start-draw-btn').disabled = project.teams.length === 0;
     document.getElementById('reset-draw-btn').disabled = true;
     document.getElementById('final-export-btn').disabled = true;
-    document.getElementById('groups-container').innerHTML = '';
   }
 
   document.getElementById('export-btn').disabled = !project.drawCompleted;
@@ -120,14 +123,13 @@ function clearData() {
 
     document.getElementById('team-count').value = '0';
     document.getElementById('total-teams-display').textContent = '0';
-    document.getElementById('group-count').value = '0';
+    const groupCountDisplay = document.getElementById('group-count-display');
+    if (groupCountDisplay) groupCountDisplay.textContent = '-';
     document.getElementById('selected-file').textContent = '';
     document.getElementById('next-settings-btn').disabled = true;
     document.getElementById('export-btn').disabled = true;
 
-    const groupCountInput = document.getElementById('group-count');
-    const groupCountBtn = groupCountInput?.nextElementSibling;
-    if (groupCountInput) groupCountInput.disabled = true;
+    const groupCountBtn = document.querySelector('[data-action="update-group-count"]');
     if (groupCountBtn) groupCountBtn.disabled = true;
 
     renderTeamTable();
@@ -173,6 +175,8 @@ function exitApp() {
 registerPageInit('draw', () => {
   if (store.drawAlgorithm) {
     initGroupsDisplay();
+  } else if (store.currentProject && store.projectsData[store.currentProject]?.groupCount > 0 && store.teamsData.length > 0) {
+    initGroupsDisplay();
   }
   renderDrawResultTable();
   updateDrawStatus();
@@ -214,22 +218,6 @@ document.addEventListener('DOMContentLoaded', () => {
   updateOrderStatus();
   renderProjectList();
 
-  const groupCountInput = document.getElementById('group-count');
-  const groupCountBtn = groupCountInput?.nextElementSibling;
-  if (groupCountInput) groupCountInput.disabled = true;
+  const groupCountBtn = document.querySelector('[data-action="update-group-count"]');
   if (groupCountBtn) groupCountBtn.disabled = true;
-
-  document.getElementById('group-count')?.addEventListener('input', function() {
-    const value = parseInt(this.value) || 0;
-    if (value >= MIN_GROUP_COUNT && value <= MAX_GROUP_COUNT && store.currentProject && store.projectsData[store.currentProject]) {
-      store.projectsData[store.currentProject].groupCount = value;
-      store.projectsData[store.currentProject].drawCompleted = false;
-      store.teamsData.forEach(team => {
-        team.group = 0;
-      });
-      store.drawAlgorithm = null;
-      store.drawCompleted = false;
-      renderProjectList();
-    }
-  });
 });
