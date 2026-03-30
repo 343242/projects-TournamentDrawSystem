@@ -42,7 +42,7 @@ export function updateGroupCount() {
   const currentCount = store.projectsData[store.currentProject]?.groupCount || DEFAULT_GROUP_COUNT;
   const totalTeams = store.teamsData.length;
 
-  const maxGroups = Math.min(Math.floor(totalTeams / 2), MAX_GROUP_COUNT);
+  const maxGroups = Math.min(Math.floor(totalTeams / 2) - (totalTeams % 2), MAX_GROUP_COUNT);
 
   showPromptDialog(
     '请输入分组数量',
