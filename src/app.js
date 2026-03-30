@@ -7,7 +7,7 @@ import { switchPage, goToNext, goToPrev, updateNavigationState, updatePageHeader
 import { startDrawSystem, changeBackground, loadCustomBackground } from './welcome.js';
 import { renderTeamTable, updateGroupCount, renderProjectList, selectProject } from './settings-page.js';
 import { generateOrder, renderOrderTable, updateOrderStatus, stopOrderAnimation, pauseOrderDraw } from './order-page.js';
-import { initGroupsDisplay, startDrawAnimation, resetDraw, createTeamItem, renderDrawResultTable, updateDrawStatus } from './draw-page.js';
+import { initGroupsDisplay, startDrawAnimation, resetDraw, createTeamItem, renderDrawResultTable, updateDrawStatus, pauseDrawAnimation, stopDrawAnimation, restoreDrawDisplay, initDrawPage } from './draw-page.js';
 import { selectFile, exportResult } from './file-ops.js';
 
 // ========== Cross-page coordination via EventBus ==========
@@ -72,16 +72,7 @@ function updateUIForProject() {
 
   if (project.drawCompleted && store.drawAlgorithm) {
     initGroupsDisplay();
-    const groups = store.drawAlgorithm.getGroups();
-    groups.forEach(group => {
-      const body = document.getElementById(`group-body-${group.index - 1}`);
-      if (body) {
-        body.innerHTML = '';
-        group.teams.forEach(team => {
-          body.appendChild(createTeamItem(team));
-        });
-      }
-    });
+    restoreDrawDisplay();
     renderDrawResultTable();
     updateDrawStatus();
     const slot = document.getElementById('draw-slot');
@@ -90,6 +81,19 @@ function updateUIForProject() {
     document.getElementById('start-draw-btn').disabled = true;
     document.getElementById('reset-draw-btn').disabled = false;
     document.getElementById('final-export-btn').disabled = false;
+  } else if (store.drawAlgorithm && project.teams.some(t => t.group > 0)) {
+    initGroupsDisplay();
+    restoreDrawDisplay();
+    renderDrawResultTable();
+    updateDrawStatus();
+    const slot = document.getElementById('draw-slot');
+    slot.classList.remove('active');
+    slot.innerHTML = '<span class="slot-text">等待抽签</span>';
+    document.getElementById('start-draw-btn').disabled = false;
+    document.getElementById('start-draw-btn').innerHTML = '<span class="btn-icon">▶️</span>继续抽签';
+    document.getElementById('start-draw-btn').className = 'btn btn-primary btn-large';
+    document.getElementById('reset-draw-btn').disabled = false;
+    document.getElementById('final-export-btn').disabled = true;
   } else {
     if (project.groupCount > 0 && project.teams.length > 0) {
       initGroupsDisplay();
@@ -111,6 +115,7 @@ function updateUIForProject() {
 function clearData() {
   showConfirmDialog('确定要清除所有数据吗？', () => {
     stopOrderAnimation();
+    stopDrawAnimation();
 
     store.teamsData = [];
     store.projectsData = {};
@@ -172,15 +177,9 @@ function exitApp() {
 
 // ========== Register page lifecycle callbacks ==========
 
-registerPageInit('draw', () => {
-  if (store.drawAlgorithm) {
-    initGroupsDisplay();
-  } else if (store.currentProject && store.projectsData[store.currentProject]?.groupCount > 0 && store.teamsData.length > 0) {
-    initGroupsDisplay();
-  }
-  renderDrawResultTable();
-  updateDrawStatus();
-});
+registerPageInit('draw', initDrawPage);
+
+registerPageLeave('draw', pauseDrawAnimation);
 
 registerPageLeave('order', pauseOrderDraw);
 

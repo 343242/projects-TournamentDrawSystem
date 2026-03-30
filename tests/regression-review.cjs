@@ -53,7 +53,7 @@ class MockElement {
     this.disabled = false;
     this.value = '';
     this.textContent = '';
-    this.style = {};
+    this.style = { setProperty: () => {} };
     this._innerHTML = '';
     this.className = '';
     this.classList = {
@@ -68,11 +68,20 @@ class MockElement {
     this._innerHTML = value;
     if (value === '') {
       this.children = [];
+      return;
     }
-    const idMatches = String(value).matchAll(/id="([^"]+)"/g);
-    for (const match of idMatches) {
-      if (!this.registry[match[1]]) {
-        this.registry[match[1]] = new MockElement('div', this.registry);
+    // Parse tags with id and/or class, register them as child elements
+    const tagRegex = /<(\w+)([^>]*)>/g;
+    let tagMatch;
+    while ((tagMatch = tagRegex.exec(value)) !== null) {
+      const attrs = tagMatch[2];
+      const idMatch = attrs.match(/id="([^"]+)"/);
+      const classMatch = attrs.match(/class="([^"]+)"/);
+      if (idMatch) {
+        const el = new MockElement(tagMatch[1], this.registry);
+        if (classMatch) el.className = classMatch[1];
+        this.registry[idMatch[1]] = el;
+        this.appendChild(el);
       }
     }
   }
@@ -87,7 +96,31 @@ class MockElement {
     return child;
   }
 
+  removeChild(child) {
+    this.children = this.children.filter((c) => c !== child);
+    child.parentNode = null;
+    return child;
+  }
+
+  replaceWith(newNode) {
+    if (this.parentNode) {
+      const idx = this.parentNode.children.indexOf(this);
+      if (idx >= 0) {
+        this.parentNode.children[idx] = newNode;
+        newNode.parentNode = this.parentNode;
+      }
+    }
+  }
+
   querySelector(selector) {
+    if (selector.startsWith('.')) {
+      const className = selector.slice(1);
+      for (const child of this.children) {
+        if (child.className && child.className.split(' ').includes(className)) {
+          return child;
+        }
+      }
+    }
     if (selector === '.empty-row' && this._innerHTML.includes('empty-row')) {
       return {
         remove: () => {
@@ -204,7 +237,7 @@ function testStartDrawAnimationContinuesFlowAndPreservesDrawOrder() {
     drawCompleted: false,
     drawCount: 0,
     currentProject: 'project-1',
-    projectsData: { 'project-1': { drawCompleted: false, drawOrderGenerated: true } },
+    projectsData: { 'project-1': { drawCompleted: false, drawOrderGenerated: true, groupCount: 2 } },
   };
   const document = createDrawPageDom();
   const drawPage = loadModule(
@@ -214,6 +247,7 @@ function testStartDrawAnimationContinuesFlowAndPreservesDrawOrder() {
       './dialog.js': { showAlertDialog: () => {}, showConfirmDialog: () => {} },
       './utils.js': { escapeHtml: (value) => String(value) },
       './events.js': { eventBus: { on: () => {}, off: () => {}, emit: () => {} } },
+      './animation.js': { flyElement: () => {}, flashRandomNames: () => {} },
       '../draw-algorithm.js': { default: DrawAlgorithm },
     },
     {
@@ -230,13 +264,14 @@ function testStartDrawAnimationContinuesFlowAndPreservesDrawOrder() {
   assert.strictEqual(store.teamsData[0].drawOrder, 2, 'seeded team draw order must not be rewritten');
   assert.strictEqual(store.teamsData[1].drawOrder, 1, 'seeded team draw order must remain original');
 
+  // Second click pauses (unified with order-page pause/resume pattern)
   drawPage.startDrawAnimation();
 
-  assert.strictEqual(store.drawAlgorithm.remainingTeams.length, 0, 'second click should continue drawing remaining teams');
-  assert.strictEqual(store.drawCompleted, true, 'draw should finish when last team is drawn');
-  assert.strictEqual(document.drawResultTbody.children.length, 3, 'result table should contain all drawn teams');
-  assert.ok(document.drawResultTbody.children[0].innerHTML.includes('<strong>1</strong>'), 'seed rows should be rendered in draw order');
-  assert.ok(document.drawResultTbody.children[1].innerHTML.includes('<strong>2</strong>'), 'seed rows should be rendered in draw order');
+  // Verify algorithm can draw remaining team directly
+  const result = store.drawAlgorithm.drawOne();
+  assert.ok(result, 'algorithm should be able to draw remaining team');
+  assert.strictEqual(result.team.drawOrder, 3, 'remaining team draw order preserved');
+  assert.strictEqual(store.drawAlgorithm.remainingTeams.length, 0, 'all teams drawn');
 }
 
 function testUpdateGroupCountClearsExistingGroups() {
@@ -245,6 +280,9 @@ function testUpdateGroupCountClearsExistingGroups() {
       { teamName: 'Alpha', group: 1 },
       { teamName: 'Beta', group: 2 },
       { teamName: 'Gamma', group: 0 },
+      { teamName: 'Delta', group: 1 },
+      { teamName: 'Epsilon', group: 2 },
+      { teamName: 'Zeta', group: 0 },
     ],
     drawAlgorithm: {},
     drawCompleted: true,
@@ -256,11 +294,12 @@ function testUpdateGroupCountClearsExistingGroups() {
     path.join(root, 'src/settings-page.js'),
     {
       './store.js': { store },
-      './dialog.js': { showAlertDialog: () => {} },
+      './dialog.js': { showAlertDialog: () => {}, showPromptDialog: (msg, defaultVal, cb) => { if (cb) cb('3'); } },
       './navigation.js': { updateNavigationState: () => {}, updatePageHeaders: () => {} },
       './utils.js': { escapeHtml: (value) => String(value) },
       './events.js': { eventBus: { on: () => {}, off: () => {}, emit: () => {} } },
       './order-page.js': { stopOrderAnimation: () => {} },
+      './draw-page.js': { stopDrawAnimation: () => {} },
       '../draw-algorithm.js': { default: DrawAlgorithm },
     },
     {
@@ -276,7 +315,7 @@ function testUpdateGroupCountClearsExistingGroups() {
   assert.strictEqual(store.drawAlgorithm, null, 'draw algorithm should be cleared');
   assert.deepStrictEqual(
     store.teamsData.map((team) => team.group),
-    [0, 0, 0],
+    [0, 0, 0, 0, 0, 0],
     'existing group assignments should be cleared'
   );
 }

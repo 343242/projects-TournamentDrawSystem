@@ -5,6 +5,7 @@ import { showAlertDialog, showPromptDialog } from './dialog.js';
 import { updateNavigationState, updatePageHeaders } from './navigation.js';
 import { escapeHtml } from './utils.js';
 import { stopOrderAnimation } from './order-page.js';
+import { stopDrawAnimation } from './draw-page.js';
 import { eventBus } from './events.js';
 import DrawAlgorithm from '../draw-algorithm.js';
 
@@ -73,6 +74,8 @@ export function updateGroupCount() {
       store.drawAlgorithm = null;
       store.drawCompleted = false;
 
+      stopDrawAnimation();
+
       // Update display
       const displayEl = document.getElementById('group-count-display');
       if (displayEl) displayEl.textContent = groupCount;
@@ -119,6 +122,7 @@ export function selectProject(projectName) {
   if (!store.projectsData[projectName]) return;
 
   stopOrderAnimation();
+  stopDrawAnimation();
 
   store.currentProject = projectName;
   const project = store.projectsData[projectName];

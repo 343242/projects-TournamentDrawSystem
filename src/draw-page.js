@@ -237,14 +237,23 @@ export function startDrawAnimation() {
     return;
   }
 
-  // 全新开始
+  // 全新开始 or 恢复中断的抽签
   const project = store.projectsData[store.currentProject];
-  const groupCount = project?.groupCount || DEFAULT_GROUP_COUNT;
-  store.drawAlgorithm = new DrawAlgorithm(store.teamsData, groupCount);
-  store.drawAlgorithm.allocateSeededTeams();
+  const isResuming = store.drawAlgorithm && store.drawAlgorithm.drawnTeams.length > 0;
+
+  if (!isResuming) {
+    const groupCount = project?.groupCount || DEFAULT_GROUP_COUNT;
+    store.drawAlgorithm = new DrawAlgorithm(store.teamsData, groupCount);
+    store.drawAlgorithm.allocateSeededTeams();
+    store.drawCount = 0;
+  }
 
   initGroupsDisplay();
-  store.drawCount = 0;
+
+  if (isResuming) {
+    restoreDrawDisplay();
+    store.drawCount = store.drawAlgorithm.drawnTeams.length;
+  }
 
   drawState = {
     isPaused: false,
@@ -264,7 +273,10 @@ export function startDrawAnimation() {
   btn.className = 'btn btn-warning btn-large';
 
   renderDrawResultTable();
-  renderSeededTeams(store.drawAlgorithm.getGroups());
+
+  if (!isResuming) {
+    renderSeededTeams(store.drawAlgorithm.getGroups());
+  }
 
   drawNextTeam();
 }
@@ -450,4 +462,105 @@ export function resetDraw() {
     document.getElementById('final-export-btn').disabled = true;
     document.getElementById('export-btn').disabled = true;
   });
+}
+
+export function pauseDrawAnimation() {
+  if (!drawState || drawState.isPaused || drawState.isComplete) return;
+
+  if (drawState.phase === 'selected') {
+    drawState.pendingPause = true;
+    return;
+  }
+
+  drawState.isPaused = true;
+  drawState.phase = 'idle';
+  if (drawState.flashControl) drawState.flashControl.cancel();
+  if (drawState.flyControl) drawState.flyControl.cancel();
+  clearTimeout(drawState.nextTimer);
+  drawState.flashControl = null;
+  drawState.flyControl = null;
+  drawState.nextTimer = null;
+
+  const slot = document.getElementById('draw-slot');
+  slot.classList.remove('active');
+  slot.innerHTML = IDLE_SLOT_HTML;
+
+  const btn = document.getElementById('start-draw-btn');
+  btn.innerHTML = '<span class="btn-icon">▶️</span>继续抽签';
+  btn.className = 'btn btn-primary btn-large';
+}
+
+export function stopDrawAnimation() {
+  if (drawState) {
+    if (drawState.flashControl) drawState.flashControl.cancel();
+    if (drawState.flyControl) drawState.flyControl.cancel();
+    clearTimeout(drawState.nextTimer);
+  }
+  drawState = null;
+}
+
+export function restoreDrawDisplay() {
+  if (!store.drawAlgorithm) return;
+  const groups = store.drawAlgorithm.getGroups();
+  groups.forEach(group => {
+    const body = document.getElementById(`group-body-${group.index - 1}`);
+    if (body) {
+      group.teams.forEach(team => {
+        insertTeamItem(body, createTeamItem(team));
+      });
+      const countEl = document.getElementById(`group-count-${group.index - 1}`);
+      if (countEl) countEl.textContent = `${group.teams.length} 支队伍`;
+    }
+  });
+}
+
+function restoreDrawUI() {
+  const btn = document.getElementById('start-draw-btn');
+  const slot = document.getElementById('draw-slot');
+
+  if (store.drawCompleted) {
+    btn.innerHTML = '<span class="btn-icon">✅</span>抽签完成';
+    btn.className = 'btn btn-success btn-large';
+    btn.disabled = true;
+    document.getElementById('reset-draw-btn').disabled = false;
+    document.getElementById('final-export-btn').disabled = false;
+    slot.classList.remove('active');
+    slot.innerHTML = '<span class="slot-team">✓ 抽签完成！</span>';
+  } else if (drawState && drawState.isPaused) {
+    btn.innerHTML = '<span class="btn-icon">▶️</span>继续抽签';
+    btn.className = 'btn btn-primary btn-large';
+    btn.disabled = false;
+    document.getElementById('reset-draw-btn').disabled = false;
+    document.getElementById('final-export-btn').disabled = true;
+    slot.classList.remove('active');
+    slot.innerHTML = IDLE_SLOT_HTML;
+  } else if (store.drawAlgorithm && store.drawAlgorithm.drawnTeams.length > 0) {
+    btn.innerHTML = '<span class="btn-icon">▶️</span>继续抽签';
+    btn.className = 'btn btn-primary btn-large';
+    btn.disabled = false;
+    document.getElementById('reset-draw-btn').disabled = false;
+    document.getElementById('final-export-btn').disabled = true;
+    slot.classList.remove('active');
+    slot.innerHTML = IDLE_SLOT_HTML;
+  } else {
+    btn.innerHTML = '<span class="btn-icon">🎰</span>开始抽签';
+    btn.className = 'btn btn-success btn-large';
+    btn.disabled = store.teamsData.length === 0;
+    document.getElementById('reset-draw-btn').disabled = true;
+    document.getElementById('final-export-btn').disabled = true;
+    slot.classList.remove('active');
+    slot.innerHTML = IDLE_SLOT_HTML;
+  }
+}
+
+export function initDrawPage() {
+  if (store.drawAlgorithm) {
+    initGroupsDisplay();
+    restoreDrawDisplay();
+  } else if (store.currentProject && store.projectsData[store.currentProject]?.groupCount > 0 && store.teamsData.length > 0) {
+    initGroupsDisplay();
+  }
+  renderDrawResultTable();
+  updateDrawStatus();
+  restoreDrawUI();
 }
