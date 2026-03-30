@@ -1,6 +1,6 @@
 // Application entry point - cross-page coordination and initialization
 
-import { store, DEFAULT_GROUP_COUNT, MIN_GROUP_COUNT, MAX_GROUP_COUNT } from './store.js';
+import { store, DEFAULT_GROUP_COUNT, MIN_GROUP_COUNT } from './store.js';
 import { eventBus } from './events.js';
 import { showConfirmDialog } from './dialog.js';
 import { switchPage, goToNext, goToPrev, updateNavigationState, updatePageHeaders, registerPageInit, registerPageLeave } from './navigation.js';
