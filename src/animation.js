@@ -16,7 +16,7 @@
  * @param {Function} [options.guardFn] - 中途检查，返回 false 则中断
  * @returns {{ cancel: Function }}
  */
-export function flyElement({ source, target, targetX, targetY, text, duration = 600, easing = 'cubic-bezier(0.25, 0.46, 0.45, 0.94)', scale = 0.5, highlightTarget, onLand, guardFn }) {
+export function flyElement({ source, target, targetX, targetY, text, duration = 500, easing = 'cubic-bezier(0.22, 1, 0.36, 1)', scale = 0.85, highlightTarget, onLand, guardFn }) {
   const sourceRect = source.getBoundingClientRect();
 
   // 计算目标坐标：优先使用显式坐标，否则从 target 元素计算中心
