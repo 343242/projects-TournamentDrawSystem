@@ -1156,17 +1156,18 @@ body {
   background: var(--gray-100);
   border-radius: 6px;
   font-size: 0.85rem;
-  animation: fadeIn 0.3s ease;
+  height: 34px;
+  box-sizing: border-box;
 }
 
-@keyframes fadeIn {
+@keyframes teamAppear {
   from {
     opacity: 0;
-    transform: translateY(-5px);
+    transform: scale(0.9);
   }
   to {
     opacity: 1;
-    transform: translateY(0);
+    transform: scale(1);
   }
 }
 
@@ -1189,17 +1190,6 @@ body {
 .group-card.fly-target {
   box-shadow: 0 0 25px rgba(95, 114, 189, 0.35);
   transition: box-shadow 0.3s ease;
-}
-
-@keyframes teamAppear {
-  from {
-    opacity: 0;
-    transform: scale(0.8) translateY(-5px);
-  }
-  to {
-    opacity: 1;
-    transform: scale(1) translateY(0);
-  }
 }
 
 .team-item .team-info {
@@ -1231,7 +1221,8 @@ body {
   padding: 5px 8px;
   border-radius: 6px;
   background: transparent;
-  min-height: 34px;
+  height: 34px;
+  box-sizing: border-box;
 }
 
 .team-item.seeded {

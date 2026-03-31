@@ -357,7 +357,6 @@ function drawNextTeam() {
             if (!drawState) return;
 
             const item = createTeamItem(result.team);
-            item.style.animation = 'teamAppear 0.35s ease';
             insertTeamItem(targetBody, item);
 
             const countEl = document.getElementById(`group-count-${result.groupIndex}`);
