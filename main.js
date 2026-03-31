@@ -86,7 +86,7 @@ ipcMain.handle('import-excel', async (event) => {
       const sheet = workbook.Sheets[name];
       data.sheets[name] = XLSX.utils.sheet_to_json(sheet, { header: 1 });
     });
-    return { success: true, canceled: false, filePath, data };
+    return { success: true, canceled: false, fileName: path.basename(filePath), data };
   } catch (error) {
     return { success: false, canceled: false, error: error.message };
   }
@@ -115,15 +115,31 @@ ipcMain.handle('export-excel', async (event, data) => {
   }
 });
 
-// 打开图片选择对话框
+// 打开图片选择对话框：读取图片并返回 data URI，不暴露文件路径给 renderer
 ipcMain.handle('open-image-dialog', async (event) => {
   if (!mainWindow || event.senderFrame !== mainWindow.webContents.mainFrame) return { canceled: true };
 
-  const result = await dialog.showOpenDialog(mainWindow, {
-    properties: ['openFile'],
-    filters: [
-      { name: 'Image Files', extensions: ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp'] }
-    ]
-  });
-  return result;
+  try {
+    const result = await dialog.showOpenDialog(mainWindow, {
+      properties: ['openFile'],
+      filters: [
+        { name: 'Image Files', extensions: ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp'] }
+      ]
+    });
+
+    if (result.canceled || result.filePaths.length === 0) {
+      return { canceled: true };
+    }
+
+    const filePath = result.filePaths[0];
+    const imageBuffer = fs.readFileSync(filePath);
+    const ext = path.extname(filePath).toLowerCase().slice(1);
+    const mimeTypes = { jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', gif: 'image/gif', bmp: 'image/bmp', webp: 'image/webp' };
+    const mimeType = mimeTypes[ext] || 'image/png';
+    const dataUri = `data:${mimeType};base64,${imageBuffer.toString('base64')}`;
+
+    return { canceled: false, dataUri };
+  } catch (error) {
+    return { canceled: true, error: error.message };
+  }
 });

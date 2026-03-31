@@ -1,6 +1,6 @@
 // 抽签设置页面逻辑
 
-import { store, DEFAULT_GROUP_COUNT, MIN_GROUP_COUNT } from './store.js';
+import { store, DEFAULT_GROUP_COUNT, MIN_GROUP_COUNT, MAX_GROUP_COUNT } from './store.js';
 import { showAlertDialog, showPromptDialog } from './dialog.js';
 import { updateNavigationState, updatePageHeaders } from './navigation.js';
 import { escapeHtml } from './utils.js';
@@ -43,7 +43,7 @@ export function updateGroupCount() {
   const currentCount = store.projectsData[store.currentProject]?.groupCount || DEFAULT_GROUP_COUNT;
   const totalTeams = store.teamsData.length;
 
-  const maxGroups = Math.floor(totalTeams / 2) - (totalTeams % 2);
+  const maxGroups = Math.min(Math.floor(totalTeams / 2), MAX_GROUP_COUNT);
 
   showPromptDialog(
     '请输入分组数量',
@@ -77,6 +77,7 @@ export function updateGroupCount() {
       store.drawCompleted = false;
 
       stopDrawAnimation();
+      stopOrderAnimation();
 
       // Update display
       const displayEl = document.getElementById('group-count-display');
@@ -84,6 +85,7 @@ export function updateGroupCount() {
 
       renderProjectList();
       eventBus.emit('groupCountUpdated');
+      eventBus.emit('updateUIForProject');
     },
     null,
     MIN_GROUP_COUNT,

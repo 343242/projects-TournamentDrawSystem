@@ -10,9 +10,8 @@ export async function selectFile() {
   const result = await window.electronAPI.importExcel();
 
   if (result.success && !result.canceled) {
-    store.currentFilePath = result.filePath;
-    const fileName = store.currentFilePath.split(/[\\/]/).pop();
-    document.getElementById('selected-file').textContent = `已选择: ${fileName}`;
+    store.currentFilePath = result.fileName;
+    document.getElementById('selected-file').textContent = `已选择: ${result.fileName}`;
 
     processImportedData(result.data);
   } else if (!result.canceled && result.error) {

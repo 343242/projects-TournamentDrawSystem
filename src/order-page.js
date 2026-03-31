@@ -186,9 +186,10 @@ export function drawNextFromState() {
 
   state.phase = 'flashing';
 
+  const undrawnTeams = state.drawSequence.slice(state.currentIndex);
   state.flashControl = flashRandomNames({
     displayEl: state.statusText,
-    teams: store.teamsData,
+    teams: undrawnTeams.length > 0 ? undrawnTeams : store.teamsData,
     renderFn: (t) => {
       state.statusText.textContent = t.teamName;
       state.statusText.classList.add('flash-rolling');

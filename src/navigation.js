@@ -18,7 +18,8 @@ export function registerPageLeave(pageId, callback) {
 
 export function updatePageHeaders() {
   const name = store.currentProject || '未选择项目';
-  const prefix = `2025大学生计算机大赛项目分组(${name})`;
+  const year = new Date().getFullYear();
+  const prefix = `${year}大学生计算机大赛项目分组(${name})`;
   const headerSettings = document.getElementById('header-settings');
   const headerOrder = document.getElementById('header-order');
   const headerDraw = document.getElementById('header-draw');

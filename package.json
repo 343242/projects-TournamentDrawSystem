@@ -26,7 +26,14 @@
     },
     "files": [
       "**/*",
-      "!**/*.Zone.Identifier"
+      "!**/*.Zone.Identifier",
+      "!tests/**",
+      "!CLAUDE.md",
+      "!PROJECT_DOCUMENTATION.md",
+      "!copy-to-web.sh",
+      "!.cline/**",
+      "!.claude/**",
+      "!.bg-shell/**"
     ],
     "win": {
       "target": "nsis"

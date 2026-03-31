@@ -320,10 +320,62 @@ function testUpdateGroupCountClearsExistingGroups() {
   );
 }
 
+function testUpdateGroupCountClearsDrawOrderState() {
+  // Bug: after full draw completion, re-grouping must clear drawOrderState
+  // so the order page can generate a new draw order
+  const store = {
+    teamsData: [
+      { teamName: 'Alpha', school: 'A', isSeeded: true, group: 1, drawOrder: 1 },
+      { teamName: 'Beta', school: 'B', isSeeded: false, group: 2, drawOrder: 2 },
+      { teamName: 'Gamma', school: 'C', isSeeded: false, group: 1, drawOrder: 3 },
+      { teamName: 'Delta', school: 'D', isSeeded: false, group: 2, drawOrder: 4 },
+    ],
+    drawAlgorithm: {},
+    drawCompleted: true,
+    currentProject: 'project-1',
+    projectsData: { 'project-1': { groupCount: 2, drawCompleted: true, drawOrderGenerated: true, drawOrderSequence: [{ teamName: 'Alpha' }, { teamName: 'Beta' }], drawOrderProgress: 4 } },
+    drawOrderState: { isComplete: true, isPaused: false },
+    isGeneratingOrder: false,
+  };
+  let stopOrderCalled = false;
+  const document = createSettingsDom(2);
+  const settingsPage = loadModule(
+    path.join(root, 'src/settings-page.js'),
+    {
+      './store.js': { store },
+      './dialog.js': { showAlertDialog: () => {}, showPromptDialog: (msg, defaultVal, cb) => { if (cb) cb('2'); } },
+      './navigation.js': { updateNavigationState: () => {}, updatePageHeaders: () => {} },
+      './utils.js': { escapeHtml: (value) => String(value) },
+      './events.js': { eventBus: { on: () => {}, off: () => {}, emit: () => {} } },
+      './order-page.js': { stopOrderAnimation: () => { stopOrderCalled = true; store.drawOrderState = null; store.isGeneratingOrder = false; } },
+      './draw-page.js': { stopDrawAnimation: () => {} },
+      '../draw-algorithm.js': { default: DrawAlgorithm },
+    },
+    {
+      document,
+      window: {},
+    }
+  );
+
+  settingsPage.updateGroupCount();
+
+  assert.ok(stopOrderCalled, 'stopOrderAnimation should be called when re-grouping');
+  assert.strictEqual(store.drawOrderState, null, 'drawOrderState must be cleared so order page can regenerate');
+  assert.strictEqual(store.isGeneratingOrder, false, 'isGeneratingOrder must be reset');
+  assert.strictEqual(store.projectsData['project-1'].drawOrderGenerated, false, 'drawOrderGenerated must be reset');
+  assert.strictEqual(store.projectsData['project-1'].drawOrderSequence, null, 'drawOrderSequence must be cleared');
+  assert.deepStrictEqual(
+    store.teamsData.map((t) => t.drawOrder),
+    [0, 0, 0, 0],
+    'all team draw orders must be reset'
+  );
+}
+
 const tests = [
   ['restore rebuilds saved groups', testRestoreRebuildsGroups],
   ['startDrawAnimation continues draw flow and preserves draw order', testStartDrawAnimationContinuesFlowAndPreservesDrawOrder],
   ['updateGroupCount clears stale groups', testUpdateGroupCountClearsExistingGroups],
+  ['updateGroupCount clears drawOrderState for re-grouping', testUpdateGroupCountClearsDrawOrderState],
 ];
 
 let failures = 0;

@@ -42,6 +42,11 @@ export function showPromptDialog(message, defaultValue, onConfirm, hint, min, ma
     inputEl.removeEventListener('keydown', handleKeydown);
     inputEl.removeEventListener('input', clampValue);
     inputEl.removeEventListener('change', clampValue);
+    document.removeEventListener('keydown', handleDocKeydown);
+  };
+
+  const handleDocKeydown = (e) => {
+    if (e.key === 'Escape') closeDialog();
   };
 
   const handleConfirm = () => {
@@ -53,6 +58,7 @@ export function showPromptDialog(message, defaultValue, onConfirm, hint, min, ma
 
   const handleKeydown = (e) => {
     if (e.key === 'Enter') handleConfirm();
+    if (e.key === 'Escape') closeDialog();
   };
 
   inputEl.addEventListener('keydown', handleKeydown);
@@ -60,6 +66,7 @@ export function showPromptDialog(message, defaultValue, onConfirm, hint, min, ma
   inputEl.addEventListener('change', clampValue);
   confirmBtn.addEventListener('click', handleConfirm);
   cancelBtn.addEventListener('click', closeDialog);
+  document.addEventListener('keydown', handleDocKeydown);
 }
 
 // 统一弹窗系统
@@ -78,6 +85,7 @@ export function showConfirmDialog(message, onConfirm) {
     dialog.classList.add('hidden');
     confirmBtn.removeEventListener('click', handleConfirm);
     cancelBtn.removeEventListener('click', closeDialog);
+    document.removeEventListener('keydown', handleKeydown);
   };
 
   const handleConfirm = () => {
@@ -85,8 +93,13 @@ export function showConfirmDialog(message, onConfirm) {
     if (onConfirm) onConfirm();
   };
 
+  const handleKeydown = (e) => {
+    if (e.key === 'Escape') closeDialog();
+  };
+
   confirmBtn.addEventListener('click', handleConfirm);
   cancelBtn.addEventListener('click', closeDialog);
+  document.addEventListener('keydown', handleKeydown);
 }
 
 // 统一风格的提示弹窗（只有确定按钮）
@@ -103,8 +116,14 @@ export function showAlertDialog(message) {
   const closeDialog = () => {
     dialog.classList.add('hidden');
     confirmBtn.removeEventListener('click', closeDialog);
+    document.removeEventListener('keydown', handleKeydown);
     cancelBtn.style.display = 'inline-flex';
   };
 
+  const handleKeydown = (e) => {
+    if (e.key === 'Escape' || e.key === 'Enter') closeDialog();
+  };
+
   confirmBtn.addEventListener('click', closeDialog);
+  document.addEventListener('keydown', handleKeydown);
 }

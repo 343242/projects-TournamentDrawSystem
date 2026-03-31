@@ -9,17 +9,25 @@ export const store = {
   teamsData: [],
   drawAlgorithm: null,
   currentFilePath: null,
-  drawCompleted: false,
   drawCount: 0,
 
-  // Multi-project support
-  projectsData: {},  // { sheetName: { teams: [], groupCount: 9, drawOrderGenerated: false, drawCompleted: false } }
+  get drawCompleted() {
+    if (this.currentProject && this.projectsData[this.currentProject]) {
+      return this.projectsData[this.currentProject].drawCompleted;
+    }
+    return false;
+  },
+  set drawCompleted(val) {
+    if (this.currentProject && this.projectsData[this.currentProject]) {
+      this.projectsData[this.currentProject].drawCompleted = val;
+    }
+  },
+
+  projectsData: {},
   currentProject: null,
   sheetNames: [],
 
-  // Draw order animation state
   drawOrderState: null,
 
-  // Anti-debounce
   isGeneratingOrder: false,
 };

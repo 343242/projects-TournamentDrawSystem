@@ -312,7 +312,7 @@ function drawNextTeam() {
   // Phase 1: 闪烁随机队名
   drawState.flashControl = flashRandomNames({
     displayEl: slot,
-    teams: store.teamsData,
+    teams: (store.drawAlgorithm && store.drawAlgorithm.remainingTeams.length > 0) ? store.drawAlgorithm.remainingTeams : store.teamsData,
     renderFn: (t) => `<span class="slot-team">${escapeHtml(t.teamName)}</span>`,
     interval: 60,
     duration: 600,

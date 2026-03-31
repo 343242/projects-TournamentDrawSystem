@@ -79,7 +79,7 @@ export function flyElement({ source, target, targetX, targetY, text, duration = 
  * @param {Object} options
  * @param {HTMLElement} options.displayEl - 显示名称的元素
  * @param {Array} options.teams - 队伍数组
- * @param {Function} options.renderFn - (team) => string，渲染到 displayEl 的内容
+ * @param {Function} options.renderFn - (team) => string|void. Return HTML string to set innerHTML, or return nothing and mutate displayEl directly.
  * @param {number} [options.interval=60] - 闪烁间隔(ms)
  * @param {number} [options.duration=600] - 闪烁总时长(ms)
  * @param {Function} [options.onSelect] - 闪烁结束后的回调
