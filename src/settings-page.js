@@ -64,6 +64,8 @@ export function updateGroupCount() {
         store.projectsData[store.currentProject].groupCount = groupCount;
         store.projectsData[store.currentProject].drawCompleted = false;
         store.projectsData[store.currentProject].drawOrderGenerated = false;
+        store.projectsData[store.currentProject].drawOrderSequence = null;
+        store.projectsData[store.currentProject].drawOrderProgress = 0;
       }
 
       store.teamsData.forEach(team => {
