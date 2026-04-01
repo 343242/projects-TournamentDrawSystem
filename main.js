@@ -119,6 +119,35 @@ ipcMain.handle('export-excel', async (event, { projects }) => {
         wb.SheetNames.splice(wb.SheetNames.indexOf(project.name), 1);
       }
       const ws = XLSX.utils.aoa_to_sheet(project.data);
+
+      ws['!merges'] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: 4 } }];
+
+      const projectNameCell = XLSX.utils.encode_cell({ r: 0, c: 0 });
+      if (!ws[projectNameCell]) ws[projectNameCell] = {};
+      ws[projectNameCell].s = {
+        alignment: { horizontal: 'center', vertical: 'center' },
+        font: { bold: true, sz: 14 }
+      };
+
+      for (let c = 0; c < 5; c++) {
+        const cellAddr = XLSX.utils.encode_cell({ r: 1, c });
+        if (!ws[cellAddr]) ws[cellAddr] = {};
+        ws[cellAddr].s = {
+          alignment: { horizontal: 'center', vertical: 'center' },
+          font: { bold: true }
+        };
+      }
+
+      for (let r = 2; r < project.data.length; r++) {
+        for (let c = 0; c < 5; c++) {
+          const cellAddr = XLSX.utils.encode_cell({ r, c });
+          if (!ws[cellAddr]) ws[cellAddr] = {};
+          ws[cellAddr].s = {
+            alignment: { horizontal: 'center', vertical: 'center' }
+          };
+        }
+      }
+
       XLSX.utils.book_append_sheet(wb, ws, project.name);
     }
 
