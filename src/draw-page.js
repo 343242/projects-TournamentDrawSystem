@@ -13,7 +13,7 @@ const IDLE_SLOT_HTML = '<span class="slot-text">等待抽签</span>';
 
 // Measure fixed team-item width from rendered text of all team names and schools
 function measureTeamItemWidth() {
-  if (store.teamsData.length === 0) return 120;
+  if (store.teamsData.length === 0) return 100;
 
   const measurer = document.createElement('div');
   measurer.style.cssText = 'position:absolute;visibility:hidden;white-space:nowrap;font-family:"Microsoft YaHei","PingFang SC",sans-serif;padding:0;';
@@ -22,14 +22,14 @@ function measureTeamItemWidth() {
   let maxContentWidth = 0;
 
   store.teamsData.forEach(team => {
-    // Measure team-name (font-weight: 500, font-size: 0.85rem)
-    measurer.style.fontSize = '0.85rem';
+    // Measure team-name (font-weight: 500, font-size: 0.75rem)
+    measurer.style.fontSize = '0.75rem';
     measurer.style.fontWeight = '500';
     measurer.textContent = team.teamName;
     maxContentWidth = Math.max(maxContentWidth, measurer.offsetWidth);
 
-    // Measure school-name (font-size: 0.75rem)
-    measurer.style.fontSize = '0.75rem';
+    // Measure school-name (font-size: 0.6rem)
+    measurer.style.fontSize = '0.6rem';
     measurer.style.fontWeight = '400';
     measurer.textContent = team.school;
     maxContentWidth = Math.max(maxContentWidth, measurer.offsetWidth);
@@ -37,9 +37,9 @@ function measureTeamItemWidth() {
 
   document.body.removeChild(measurer);
 
-  // Add padding (5px * 2 = 10px) + seed-badge space (36px if any seeded) + margin
+  // Add padding (5px * 2 = 10px) + seed-badge space (26px if any seeded)
   const hasSeeded = store.teamsData.some(t => t.isSeeded);
-  return maxContentWidth + 10 + (hasSeeded ? 36 : 0);
+  return maxContentWidth + 10 + (hasSeeded ? 26 : 0);
 }
 
 // Calculate per-group team capacity (matches DrawAlgorithm distribution)

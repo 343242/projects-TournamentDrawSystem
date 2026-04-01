@@ -1142,21 +1142,22 @@ body {
 }
 
 .group-body {
-  padding: 6px 8px;
+  padding: 4px 6px;
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(var(--team-item-width, 120px), auto));
-  gap: 3px;
+  grid-template-columns: repeat(auto-fill, var(--team-item-width, 100px));
+  gap: 2px;
 }
 
 .team-item {
   display: flex;
   align-items: center;
-  padding: 5px 8px;
+  padding: 2px 5px;
   background: var(--gray-100);
-  border-radius: 6px;
-  font-size: 0.85rem;
-  height: 34px;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  height: 28px;
   box-sizing: border-box;
+  overflow: hidden;
   animation: teamLand 0.25s ease-out;
 }
 
@@ -1207,46 +1208,49 @@ body {
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 1px;
+  gap: 0;
 }
 
 .team-item .team-name {
   color: var(--gray-700);
-  font-weight: 600;
+  font-weight: 500;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  line-height: 1.2;
 }
 
 .team-item .school-name {
   color: var(--gray-400);
-  font-size: 0.7rem;
+  font-size: 0.6rem;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  line-height: 1.15;
 }
 
 /* Placeholder slot for pre-sized group cards */
 .team-slot-empty {
-  padding: 5px 8px;
-  border-radius: 6px;
+  padding: 2px 5px;
+  border-radius: 4px;
   background: transparent;
-  height: 34px;
+  height: 28px;
   box-sizing: border-box;
-  display: inline-block;
 }
 
 .team-item.seeded {
-  border-left: 3px solid var(--warning);
+  border-left: 2px solid var(--warning);
 }
 
 .team-item .seed-badge {
   background: var(--warning);
   color: var(--gray-800);
-  padding: 2px 6px;
-  border-radius: 10px;
-  font-size: 0.7rem;
+  padding: 1px 4px;
+  border-radius: 8px;
+  font-size: 0.55rem;
   font-weight: 600;
+  margin-left: 2px;
+  flex-shrink: 0;
 }
 
 /* ========== 滚动条 ========== */
