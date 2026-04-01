@@ -1143,13 +1143,13 @@ body {
 
 .group-body {
   padding: 6px 8px;
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(var(--team-item-width, 120px), auto));
   gap: 3px;
 }
 
 .team-item {
-  display: inline-flex;
+  display: flex;
   align-items: center;
   padding: 5px 8px;
   background: var(--gray-100);
@@ -1200,8 +1200,6 @@ body {
 
 /* 目标组高亮 */
 .group-card.fly-target {
-  box-shadow: 0 0 0 3px rgba(95, 114, 189, 0.5);
-  transition: box-shadow 0.25s ease-out;
 }
 
 .team-item .team-info {
