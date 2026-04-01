@@ -122,6 +122,16 @@ ipcMain.handle('export-excel', async (event, { projects }) => {
 
       ws['!merges'] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: 4 } }];
 
+      ws['!cols'] = [
+        { wch: 8 },   // 分组号
+        { wch: 10 },  // 队伍代号
+        { wch: 20 },  // 参赛队伍
+        { wch: 20 },  // 学校
+        { wch: 8 }    // 种子队
+      ];
+
+      ws['!rows'] = [{ hpt: 30 }];
+
       const border = {
         top: { style: 'thin' },
         bottom: { style: 'thin' },
