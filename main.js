@@ -1,7 +1,7 @@
 const { app, BrowserWindow, ipcMain, dialog } = require('electron');
 const path = require('path');
 const fs = require('fs');
-const XLSX = require('xlsx');
+const XLSX = require('xlsx-js-style');
 
 let mainWindow;
 
@@ -122,11 +122,19 @@ ipcMain.handle('export-excel', async (event, { projects }) => {
 
       ws['!merges'] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: 4 } }];
 
+      const border = {
+        top: { style: 'thin' },
+        bottom: { style: 'thin' },
+        left: { style: 'thin' },
+        right: { style: 'thin' }
+      };
+
       const projectNameCell = XLSX.utils.encode_cell({ r: 0, c: 0 });
       if (!ws[projectNameCell]) ws[projectNameCell] = {};
       ws[projectNameCell].s = {
         alignment: { horizontal: 'center', vertical: 'center' },
-        font: { bold: true, sz: 14 }
+        font: { bold: true, sz: 14 },
+        border
       };
 
       for (let c = 0; c < 5; c++) {
@@ -134,7 +142,8 @@ ipcMain.handle('export-excel', async (event, { projects }) => {
         if (!ws[cellAddr]) ws[cellAddr] = {};
         ws[cellAddr].s = {
           alignment: { horizontal: 'center', vertical: 'center' },
-          font: { bold: true }
+          font: { bold: true },
+          border
         };
       }
 
@@ -143,7 +152,8 @@ ipcMain.handle('export-excel', async (event, { projects }) => {
           const cellAddr = XLSX.utils.encode_cell({ r, c });
           if (!ws[cellAddr]) ws[cellAddr] = {};
           ws[cellAddr].s = {
-            alignment: { horizontal: 'center', vertical: 'center' }
+            alignment: { horizontal: 'center', vertical: 'center' },
+            border
           };
         }
       }
