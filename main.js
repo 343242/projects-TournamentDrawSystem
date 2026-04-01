@@ -125,8 +125,8 @@ ipcMain.handle('export-excel', async (event, { projects }) => {
       ws['!cols'] = [
         { wch: 8 },   // 分组号
         { wch: 10 },  // 队伍代号
-        { wch: 20 },  // 参赛队伍
-        { wch: 20 },  // 学校
+        { wch: 28 },  // 参赛队伍
+        { wch: 28 },  // 学校
         { wch: 8 }    // 种子队
       ];
 
@@ -139,11 +139,15 @@ ipcMain.handle('export-excel', async (event, { projects }) => {
         right: { style: 'thin' }
       };
 
+      const dataFont = { name: 'SimSun', sz: 11 };
+      const centerAlign = { horizontal: 'center', vertical: 'center' };
+      const leftAlign = { horizontal: 'left', vertical: 'center' };
+
       const projectNameCell = XLSX.utils.encode_cell({ r: 0, c: 0 });
       if (!ws[projectNameCell]) ws[projectNameCell] = {};
       ws[projectNameCell].s = {
-        alignment: { horizontal: 'center', vertical: 'center' },
-        font: { bold: true, sz: 14 },
+        alignment: centerAlign,
+        font: { bold: true, sz: 14, name: 'SimSun' },
         border
       };
 
@@ -151,8 +155,8 @@ ipcMain.handle('export-excel', async (event, { projects }) => {
         const cellAddr = XLSX.utils.encode_cell({ r: 1, c });
         if (!ws[cellAddr]) ws[cellAddr] = {};
         ws[cellAddr].s = {
-          alignment: { horizontal: 'center', vertical: 'center' },
-          font: { bold: true },
+          alignment: centerAlign,
+          font: { bold: true, name: 'SimSun', sz: 11 },
           border
         };
       }
@@ -161,8 +165,10 @@ ipcMain.handle('export-excel', async (event, { projects }) => {
         for (let c = 0; c < 5; c++) {
           const cellAddr = XLSX.utils.encode_cell({ r, c });
           if (!ws[cellAddr]) ws[cellAddr] = {};
+          const isNameOrSchool = c === 2 || c === 3;
           ws[cellAddr].s = {
-            alignment: { horizontal: 'center', vertical: 'center' },
+            alignment: isNameOrSchool ? leftAlign : centerAlign,
+            font: dataFont,
             border
           };
         }
