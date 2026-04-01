@@ -121,27 +121,45 @@ export function parseSheetData(data) {
 }
 
 export async function exportResult() {
-  if (!store.drawCompleted || !store.drawAlgorithm) {
-    showAlertDialog('请先完成抽签');
-    return;
-  }
+  const projects = [];
 
-  const groups = store.drawAlgorithm.getGroups();
-  const exportData = [['分组号', '队伍代号', '参赛队伍', '学校', '种子队']];
+  store.sheetNames.forEach(projectName => {
+    const project = store.projectsData[projectName];
+    if (!project || !project.drawCompleted) {
+      return;
+    }
 
-  groups.forEach(group => {
-    group.teams.forEach(team => {
-      exportData.push([
-        group.index,
+    const teams = [...project.teams].sort((a, b) => {
+      if (a.group !== b.group) {
+        return a.group - b.group;
+      }
+      return a.drawOrder - b.drawOrder;
+    });
+
+    const data = [
+      [projectName],
+      ['分组号', '队伍代号', '参赛队伍', '学校', '种子队']
+    ];
+
+    teams.forEach(team => {
+      data.push([
+        String(team.group),
         team.id,
         team.teamName,
         team.school,
         team.isSeeded ? '是' : ''
       ]);
     });
+
+    projects.push({ name: projectName, data });
   });
 
-  const result = await window.electronAPI.exportExcel(exportData);
+  if (projects.length === 0) {
+    showAlertDialog('请先完成至少一个项目的抽签');
+    return;
+  }
+
+  const result = await window.electronAPI.exportExcel({ projects });
 
   if (result.success) {
     showAlertDialog('导出成功！');

@@ -93,7 +93,7 @@ ipcMain.handle('import-excel', async (event) => {
 });
 
 // 导出Excel：主进程内部完成对话框+文件写入，renderer只发送数据
-ipcMain.handle('export-excel', async (event, data) => {
+ipcMain.handle('export-excel', async (event, { projects }) => {
   if (!mainWindow || event.senderFrame !== mainWindow.webContents.mainFrame) return { success: false, error: 'Invalid sender' };
   try {
     const result = await dialog.showSaveDialog(mainWindow, {
@@ -105,9 +105,23 @@ ipcMain.handle('export-excel', async (event, data) => {
     if (result.canceled) {
       return { success: false, canceled: true };
     }
-    const ws = XLSX.utils.aoa_to_sheet(data);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, '分组结果');
+
+    let wb;
+    try {
+      wb = XLSX.readFile(result.filePath);
+    } catch (e) {
+      wb = XLSX.utils.book_new();
+    }
+
+    for (const project of projects) {
+      if (wb.SheetNames.includes(project.name)) {
+        delete wb.Sheets[project.name];
+        wb.SheetNames.splice(wb.SheetNames.indexOf(project.name), 1);
+      }
+      const ws = XLSX.utils.aoa_to_sheet(project.data);
+      XLSX.utils.book_append_sheet(wb, ws, project.name);
+    }
+
     XLSX.writeFile(wb, result.filePath);
     return { success: true, canceled: false };
   } catch (error) {
