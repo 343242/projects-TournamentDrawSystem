@@ -1115,7 +1115,7 @@ body {
   background: white;
   border-radius: var(--border-radius);
   overflow: hidden;
-  box-shadow: var(--shadow);
+  box-shadow: none;
 }
 
 .group-header {
@@ -1143,14 +1143,13 @@ body {
 
 .group-body {
   padding: 6px 8px;
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(var(--team-item-width, 120px), 1fr));
+  display: flex;
+  flex-wrap: wrap;
   gap: 3px;
 }
 
 .team-item {
-  display: flex;
-  justify-content: space-between;
+  display: inline-flex;
   align-items: center;
   padding: 5px 8px;
   background: var(--gray-100);
@@ -1201,7 +1200,7 @@ body {
 
 /* 目标组高亮 */
 .group-card.fly-target {
-  box-shadow: 0 0 0 3px rgba(95, 114, 189, 0.5), 0 4px 16px rgba(95, 114, 189, 0.25);
+  box-shadow: 0 0 0 3px rgba(95, 114, 189, 0.5);
   transition: box-shadow 0.25s ease-out;
 }
 
@@ -1236,6 +1235,7 @@ body {
   background: transparent;
   height: 34px;
   box-sizing: border-box;
+  display: inline-block;
 }
 
 .team-item.seeded {
