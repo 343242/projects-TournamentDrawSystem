@@ -29,10 +29,11 @@ function updateUIForProject() {
 
   const project = store.projectsData[store.currentProject];
   const el = (id) => document.getElementById(id);
+  const set = (id, prop, val) => { const e = el(id); if (e) e[prop] = val; };
 
   // 更新统计信息
-  el('team-count')?.value = project.teams.length;
-  el('total-teams-display')?.textContent = project.teams.length;
+  set('team-count', 'value', project.teams.length);
+  set('total-teams-display', 'textContent', project.teams.length);
 
   const groupCount = project.teams.length > 0 ? (project.groupCount || DEFAULT_GROUP_COUNT) : 0;
   const groupCountDisplay = el('group-count-display');
@@ -43,8 +44,8 @@ function updateUIForProject() {
 
   renderTeamTable();
 
-  el('next-settings-btn')?.disabled = project.teams.length === 0;
-  el('next-order-btn')?.disabled = !project.drawOrderGenerated;
+  set('next-settings-btn', 'disabled', project.teams.length === 0);
+  set('next-order-btn', 'disabled', !project.drawOrderGenerated);
 
   if (project.drawOrderGenerated || project.teams.some(t => t.drawOrder > 0)) {
     renderOrderTable();
@@ -79,27 +80,31 @@ function updateUIForProject() {
     renderDrawResultTable();
     updateDrawStatus();
     const slot = el('draw-slot');
-    slot?.classList.remove('active');
-    if (slot) slot.innerHTML = '<span class="slot-team">✓ 抽签完成！</span>';
-    el('start-draw-btn')?.disabled = true;
-    el('reset-draw-btn')?.disabled = false;
-    el('final-export-btn')?.disabled = false;
+    if (slot) {
+      slot.classList.remove('active');
+      slot.innerHTML = '<span class="slot-team">✓ 抽签完成！</span>';
+    }
+    set('start-draw-btn', 'disabled', true);
+    set('reset-draw-btn', 'disabled', false);
+    set('final-export-btn', 'disabled', false);
   } else if (store.drawAlgorithm && project.teams.some(t => t.group > 0)) {
     initGroupsDisplay();
     restoreDrawDisplay();
     renderDrawResultTable();
     updateDrawStatus();
     const slot = el('draw-slot');
-    slot?.classList.remove('active');
-    if (slot) slot.innerHTML = '<span class="slot-text">等待抽签</span>';
+    if (slot) {
+      slot.classList.remove('active');
+      slot.innerHTML = '<span class="slot-text">等待抽签</span>';
+    }
     const startBtn = el('start-draw-btn');
     if (startBtn) {
       startBtn.disabled = false;
       startBtn.innerHTML = '<span class="btn-icon">▶️</span>继续抽签';
       startBtn.className = 'btn btn-primary btn-large';
     }
-    el('reset-draw-btn')?.disabled = false;
-    el('final-export-btn')?.disabled = true;
+    set('reset-draw-btn', 'disabled', false);
+    set('final-export-btn', 'disabled', true);
   } else {
     if (project.groupCount > 0 && project.teams.length > 0) {
       initGroupsDisplay();
@@ -110,14 +115,16 @@ function updateUIForProject() {
     renderDrawResultTable();
     updateDrawStatus();
     const slot = el('draw-slot');
-    slot?.classList.remove('active');
-    if (slot) slot.innerHTML = '<span class="slot-text">抽签队伍</span><br><span class="slot-text"><b>等待抽签</b></span>';
-    el('start-draw-btn')?.disabled = project.teams.length === 0;
-    el('reset-draw-btn')?.disabled = true;
-    el('final-export-btn')?.disabled = true;
+    if (slot) {
+      slot.classList.remove('active');
+      slot.innerHTML = '<span class="slot-text">抽签队伍</span><br><span class="slot-text"><b>等待抽签</b></span>';
+    }
+    set('start-draw-btn', 'disabled', project.teams.length === 0);
+    set('reset-draw-btn', 'disabled', true);
+    set('final-export-btn', 'disabled', true);
   }
 
-  el('export-btn')?.disabled = !project.drawCompleted;
+  set('export-btn', 'disabled', !project.drawCompleted);
 }
 
 function clearData() {
@@ -135,14 +142,15 @@ function clearData() {
     store.drawOrderState = null;
 
     const el = (id) => document.getElementById(id);
+    const set = (id, prop, val) => { const e = el(id); if (e) e[prop] = val; };
 
-    el('team-count')?.value = '0';
-    el('total-teams-display')?.textContent = '0';
+    set('team-count', 'value', '0');
+    set('total-teams-display', 'textContent', '0');
     const groupCountDisplay = el('group-count-display');
     if (groupCountDisplay) groupCountDisplay.textContent = '-';
-    el('selected-file')?.textContent = '';
-    el('next-settings-btn')?.disabled = true;
-    el('export-btn')?.disabled = true;
+    set('selected-file', 'textContent', '');
+    set('next-settings-btn', 'disabled', true);
+    set('export-btn', 'disabled', true);
 
     const groupCountBtn = document.querySelector('[data-action="update-group-count"]');
     if (groupCountBtn) groupCountBtn.disabled = true;
@@ -161,7 +169,7 @@ function clearData() {
       genBtn.innerHTML = '<span class="btn-icon">🎲</span>启动抽签';
       genBtn.className = 'btn btn-success btn-large';
     }
-    el('next-order-btn')?.disabled = true;
+    set('next-order-btn', 'disabled', true);
     updateOrderStatus();
 
     // Reset draw page
@@ -170,15 +178,15 @@ function clearData() {
     const drawTbody = document.querySelector('#draw-result-table tbody');
     if (drawTbody) drawTbody.innerHTML = '<tr class="empty-row"><td colspan="4">请先开始抽签</td></tr>';
     const slot = el('draw-slot');
-    slot?.classList.remove('active');
-    if (slot) slot.innerHTML = '<span class="slot-text">抽签队伍</span><br><span class="slot-text"><b>等待抽签</b></span>';
-    const drawStatusLabel = el('draw-status-label');
-    if (drawStatusLabel) drawStatusLabel.textContent = '--';
-    const drawStatusCount = el('draw-status-count');
-    if (drawStatusCount) drawStatusCount.textContent = '剩余: -- 支';
-    el('start-draw-btn')?.disabled = true;
-    el('reset-draw-btn')?.disabled = true;
-    el('final-export-btn')?.disabled = true;
+    if (slot) {
+      slot.classList.remove('active');
+      slot.innerHTML = '<span class="slot-text">抽签队伍</span><br><span class="slot-text"><b>等待抽签</b></span>';
+    }
+    set('draw-status-label', 'textContent', '--');
+    set('draw-status-count', 'textContent', '剩余: -- 支');
+    set('start-draw-btn', 'disabled', true);
+    set('reset-draw-btn', 'disabled', true);
+    set('final-export-btn', 'disabled', true);
   });
 }
 
