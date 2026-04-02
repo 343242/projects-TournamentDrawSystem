@@ -6,27 +6,10 @@ import { updateNavigationState } from './navigation.js';
 import { shuffleArray, escapeHtml } from './utils.js';
 import { eventBus } from './events.js';
 import { flyElement, flashRandomNames } from './animation.js';
+import { cancelActiveAnimations, pauseAnimState, stopAnimState, createAnimationState } from './animation-helpers.js';
 
-export function generateOrder() {
-  if (store.teamsData.length === 0) {
-    showAlertDialog('请先上传队伍数据');
-    return;
-  }
-
-  const btn = document.getElementById('generate-order-btn');
-  const project = store.currentProject ? store.projectsData[store.currentProject] : null;
-
-  if (store.drawOrderState && !store.drawOrderState.isPaused && !store.drawOrderState.isComplete) {
-    const state = store.drawOrderState;
-
-    if (state.phase === 'selected') {
-      state.pendingPause = true;
-      return;
-    }
-
-    state.isPaused = true;
-    state.phase = 'idle';
-    if (state.flashControl) state.flashControl.cancel();
+function handleRunningOrder(state, btn, project) {
+  if (pauseAnimState(state)) {
     state.statusText.textContent = '等待开始抽签';
     state.statusText.classList.remove('flash-rolling', 'flash-selected');
     state.statusText.style.transform = '';
@@ -37,61 +20,49 @@ export function generateOrder() {
     if (project) {
       project.drawOrderProgress = state.currentIndex;
     }
-    return;
   }
+}
 
-  if (store.drawOrderState && store.drawOrderState.isPaused) {
-    store.drawOrderState.isPaused = false;
-    store.drawOrderState.pendingPause = false;
-    btn.innerHTML = '<span class="btn-icon">⏸️</span>暂停抽签';
-    btn.className = 'btn btn-warning btn-large';
-    drawNextFromState();
-    return;
-  }
+function handlePausedOrder(btn) {
+  store.drawOrderState.isPaused = false;
+  store.drawOrderState.pendingPause = false;
+  btn.innerHTML = '<span class="btn-icon">⏸️</span>暂停抽签';
+  btn.className = 'btn btn-warning btn-large';
+  drawNextFromState();
+}
 
-  if (store.drawOrderState && store.drawOrderState.isComplete) return;
+function resumeSavedOrder(project, btn) {
+  store.isGeneratingOrder = true;
 
-  // Resume from saved project state (after switching projects)
-  if (project && project.drawOrderSequence && !project.drawOrderGenerated) {
-    store.isGeneratingOrder = true;
+  const drawSequence = project.drawOrderSequence;
+  const startIndex = project.drawOrderProgress || 0;
+  const seededTeams = drawSequence.filter(t => t.isSeeded);
+  const nonSeededTeams = drawSequence.filter(t => !t.isSeeded);
+  const tbody = document.querySelector('#order-table tbody');
+  const statusLabel = document.getElementById('order-status-label');
+  const statusText = document.getElementById('order-status-text');
+  const statusCount = document.getElementById('order-status-count');
 
-    const drawSequence = project.drawOrderSequence;
-    const startIndex = project.drawOrderProgress || 0;
-    const seededTeams = drawSequence.filter(t => t.isSeeded);
-    const nonSeededTeams = drawSequence.filter(t => !t.isSeeded);
-    const tbody = document.querySelector('#order-table tbody');
-    const statusLabel = document.getElementById('order-status-label');
-    const statusText = document.getElementById('order-status-text');
-    const statusCount = document.getElementById('order-status-count');
+  store.drawOrderState = createAnimationState({
+    drawSequence,
+    seededTeams,
+    nonSeededTeams,
+    currentIndex: startIndex,
+    statusLabel,
+    statusText,
+    statusCount,
+    tbody
+  });
 
-    store.drawOrderState = {
-      drawSequence,
-      seededTeams,
-      nonSeededTeams,
-      currentIndex: startIndex,
-      flashControl: null,
-      flyControl: null,
-      nextTimer: null,
-      isPaused: false,
-      isComplete: false,
-      pendingPause: false,
-      phase: 'idle',
-      statusLabel,
-      statusText,
-      statusCount,
-      tbody
-    };
+  btn.innerHTML = '<span class="btn-icon">⏸️</span>暂停抽签';
+  btn.className = 'btn btn-warning btn-large';
+  btn.disabled = false;
+  document.getElementById('next-order-btn').disabled = true;
 
-    btn.innerHTML = '<span class="btn-icon">⏸️</span>暂停抽签';
-    btn.className = 'btn btn-warning btn-large';
-    btn.disabled = false;
-    document.getElementById('next-order-btn').disabled = true;
+  drawNextFromState();
+}
 
-    drawNextFromState();
-    return;
-  }
-
-  if (store.isGeneratingOrder) return;
+function initNewOrderDraw(project, btn) {
   store.isGeneratingOrder = true;
 
   const seededTeams = store.teamsData.filter(t => t.isSeeded);
@@ -104,7 +75,6 @@ export function generateOrder() {
   seededTeams.forEach(team => drawSequence.push(team));
   nonSeededTeams.forEach(team => drawSequence.push(team));
 
-  // Save sequence to project for resume support
   if (project) {
     project.drawOrderSequence = drawSequence;
     project.drawOrderProgress = 0;
@@ -117,23 +87,16 @@ export function generateOrder() {
   const statusText = document.getElementById('order-status-text');
   const statusCount = document.getElementById('order-status-count');
 
-  store.drawOrderState = {
+  store.drawOrderState = createAnimationState({
     drawSequence,
     seededTeams,
     nonSeededTeams,
     currentIndex: 0,
-    flashControl: null,
-    flyControl: null,
-    nextTimer: null,
-    isPaused: false,
-    isComplete: false,
-    pendingPause: false,
-    phase: 'idle',
     statusLabel,
     statusText,
     statusCount,
     tbody
-  };
+  });
 
   btn.innerHTML = '<span class="btn-icon">⏸️</span>暂停抽签';
   btn.className = 'btn btn-warning btn-large';
@@ -142,6 +105,37 @@ export function generateOrder() {
   document.getElementById('next-order-btn').disabled = true;
 
   drawNextFromState();
+}
+
+export function generateOrder() {
+  if (store.teamsData.length === 0) {
+    showAlertDialog('请先上传队伍数据');
+    return;
+  }
+
+  const btn = document.getElementById('generate-order-btn');
+  const project = store.currentProject ? store.projectsData[store.currentProject] : null;
+
+  if (store.drawOrderState && !store.drawOrderState.isPaused && !store.drawOrderState.isComplete) {
+    handleRunningOrder(store.drawOrderState, btn, project);
+    return;
+  }
+
+  if (store.drawOrderState && store.drawOrderState.isPaused) {
+    handlePausedOrder(btn);
+    return;
+  }
+
+  if (store.drawOrderState && store.drawOrderState.isComplete) return;
+
+  if (project && project.drawOrderSequence && !project.drawOrderGenerated) {
+    resumeSavedOrder(project, btn);
+    return;
+  }
+
+  if (store.isGeneratingOrder) return;
+
+  initNewOrderDraw(project, btn);
 }
 
 export function drawNextFromState() {
@@ -327,48 +321,32 @@ export function pauseOrderDraw() {
   const state = store.drawOrderState;
   if (!state || state.isPaused || state.isComplete) return;
 
-  if (state.phase === 'selected') {
-    state.pendingPause = true;
-    return;
-  }
+  if (pauseAnimState(state)) {
+    state.statusText.textContent = '等待开始抽签';
+    state.statusText.classList.remove('flash-rolling', 'flash-selected');
+    state.statusText.style.transform = '';
+    state.statusText.style.color = '';
+    state.statusText.style.textShadow = '';
+    const btn = document.getElementById('generate-order-btn');
+    btn.innerHTML = '<span class="btn-icon">▶️</span>继续抽签';
+    btn.className = 'btn btn-primary btn-large';
 
-  state.isPaused = true;
-  state.phase = 'idle';
-  if (state.flashControl) state.flashControl.cancel();
-  state.statusText.textContent = '等待开始抽签';
-  state.statusText.classList.remove('flash-rolling', 'flash-selected');
-  state.statusText.style.transform = '';
-  state.statusText.style.color = '';
-  state.statusText.style.textShadow = '';
-  const btn = document.getElementById('generate-order-btn');
-  btn.innerHTML = '<span class="btn-icon">▶️</span>继续抽签';
-  btn.className = 'btn btn-primary btn-large';
-
-  // Save progress to project
-  const project = store.currentProject ? store.projectsData[store.currentProject] : null;
-  if (project) {
-    project.drawOrderProgress = state.currentIndex;
+    // Save progress to project
+    const project = store.currentProject ? store.projectsData[store.currentProject] : null;
+    if (project) {
+      project.drawOrderProgress = state.currentIndex;
+    }
   }
 }
 
 export function stopOrderAnimation() {
   const state = store.drawOrderState;
   if (state) {
-    // Save progress to project before clearing
     const project = store.currentProject ? store.projectsData[store.currentProject] : null;
     if (project && !state.isComplete) {
       project.drawOrderProgress = state.currentIndex;
     }
-
-    if (state.flashControl) state.flashControl.cancel();
-    if (state.flyControl) state.flyControl.cancel();
-    clearTimeout(state.nextTimer);
-    state.flashControl = null;
-    state.flyControl = null;
-    state.nextTimer = null;
-    state.isPaused = true;
-    state.isComplete = true;
-    state.phase = 'idle';
+    stopAnimState(state);
   }
   store.drawOrderState = null;
   store.isGeneratingOrder = false;

@@ -5,11 +5,23 @@ import { showAlertDialog, showConfirmDialog } from './dialog.js';
 import { escapeHtml } from './utils.js';
 import { eventBus } from './events.js';
 import { flyElement, flashRandomNames } from './animation.js';
+import { createAnimationState, cancelActiveAnimations, pauseAnimState, stopAnimState } from './animation-helpers.js';
 import DrawAlgorithm from '../draw-algorithm.js';
 
 const getGroupLabel = (i) => String.fromCharCode(65 + i);
 
 const IDLE_SLOT_HTML = '<span class="slot-text">等待抽签</span>';
+const COMPLETE_SLOT_HTML = '<span class="slot-team">✓ 抽签完成！</span>';
+
+// Sync group assignment from algorithm's cloned team back to store.teamsData for UI rendering
+function syncGroupToStore(team) {
+  const original = store.teamsData.find(t =>
+    t.teamName === team.teamName &&
+    t.school === team.school &&
+    t.drawOrder === team.drawOrder
+  );
+  if (original) original.group = team.group;
+}
 
 // Measure fixed team-item width from rendered text of all team names and schools
 function measureTeamItemWidth() {
@@ -62,8 +74,8 @@ function insertTeamItem(body, item) {
   }
 }
 
-// 抽签动画状态（类似 order-page 的 drawOrderState）
-let drawState = null;
+// 抽签动画状态（类似 order-page 的 drawOrderState，存储在 store 中）
+let drawGeneration = 0;
 
 export function initGroupsDisplay() {
   const container = document.getElementById('groups-container');
@@ -172,6 +184,7 @@ function renderSeededTeams(groups) {
     if (body) {
       group.teams.forEach(team => {
         team.group = group.index;
+        syncGroupToStore(team);
         insertTeamItem(body, createTeamItem(team));
         seededTeams.push(team);
       });
@@ -203,34 +216,22 @@ export function startDrawAnimation() {
   const btn = document.getElementById('start-draw-btn');
 
   // 暂停（正在运行时点击）
-  if (drawState && !drawState.isPaused && !drawState.isComplete) {
-    if (drawState.phase === 'selected') {
-      drawState.pendingPause = true;
-      return;
+  if (store.drawAnimationState && !store.drawAnimationState.isPaused && !store.drawAnimationState.isComplete) {
+    if (pauseAnimState(store.drawAnimationState)) {
+      const slot = document.getElementById('draw-slot');
+      slot.classList.remove('active');
+      slot.innerHTML = IDLE_SLOT_HTML;
+      btn.innerHTML = '<span class="btn-icon">▶️</span>继续抽签';
+      btn.className = 'btn btn-primary btn-large';
+      updateDrawStatus();
     }
-    drawState.isPaused = true;
-    drawState.phase = 'idle';
-    if (drawState.flashControl) drawState.flashControl.cancel();
-    if (drawState.flyControl) drawState.flyControl.cancel();
-    clearTimeout(drawState.nextTimer);
-    drawState.flashControl = null;
-    drawState.flyControl = null;
-    drawState.nextTimer = null;
-
-    const slot = document.getElementById('draw-slot');
-    slot.classList.remove('active');
-    slot.innerHTML = IDLE_SLOT_HTML;
-
-    btn.innerHTML = '<span class="btn-icon">▶️</span>继续抽签';
-    btn.className = 'btn btn-primary btn-large';
-    updateDrawStatus();
     return;
   }
 
   // 继续（暂停后点击）
-  if (drawState && drawState.isPaused) {
-    drawState.isPaused = false;
-    drawState.pendingPause = false;
+  if (store.drawAnimationState && store.drawAnimationState.isPaused) {
+    store.drawAnimationState.isPaused = false;
+    store.drawAnimationState.pendingPause = false;
     btn.innerHTML = '<span class="btn-icon">⏸️</span>暂停抽签';
     btn.className = 'btn btn-warning btn-large';
     drawNextTeam();
@@ -255,15 +256,7 @@ export function startDrawAnimation() {
     store.drawCount = store.drawAlgorithm.drawnTeams.length;
   }
 
-  drawState = {
-    isPaused: false,
-    isComplete: false,
-    pendingPause: false,
-    phase: 'idle',
-    flashControl: null,
-    flyControl: null,
-    nextTimer: null,
-  };
+  store.drawAnimationState = createAnimationState({ generation: ++drawGeneration });
 
   document.getElementById('reset-draw-btn').disabled = false;
   document.getElementById('final-export-btn').disabled = true;
@@ -302,23 +295,25 @@ function drawNextTeam() {
     return;
   }
 
-  if (drawState && drawState.isPaused) return;
+  if (!store.drawAnimationState || store.drawAnimationState.isPaused) return;
+
+  const gen = store.drawAnimationState.generation;
 
   const slot = document.getElementById('draw-slot');
   slot.classList.add('active');
 
-  drawState.phase = 'flashing';
+  store.drawAnimationState.phase = 'flashing';
 
   // Phase 1: 闪烁随机队名
-  drawState.flashControl = flashRandomNames({
+  store.drawAnimationState.flashControl = flashRandomNames({
     displayEl: slot,
     teams: (store.drawAlgorithm && store.drawAlgorithm.remainingTeams.length > 0) ? store.drawAlgorithm.remainingTeams : store.teamsData,
     renderFn: (t) => `<span class="slot-team">${escapeHtml(t.teamName)}</span>`,
     interval: 60,
     duration: 600,
-    guardFn: () => drawState && !drawState.isPaused,
+    guardFn: () => store.drawAnimationState && !store.drawAnimationState.isPaused && store.drawAnimationState.generation === gen,
     onSelect: () => {
-      if (!drawState || drawState.isPaused) return;
+      if (!store.drawAnimationState || store.drawAnimationState.isPaused || store.drawAnimationState.generation !== gen) return;
 
       // 在闪烁结束后才从算法中抽取队伍，避免暂停时丢失数据
       const result = store.drawAlgorithm.drawOne();
@@ -331,30 +326,33 @@ function drawNextTeam() {
 
       store.drawCount++;
       result.team.group = result.groupIndex + 1;
+      syncGroupToStore(result.team);
 
-      drawState.phase = 'selected';
+      store.drawAnimationState.phase = 'selected';
 
       // Phase 2: 显示选中的队伍和分组（独立 span，无箭头/br）
       slot.innerHTML = `<span class="slot-team slot-team-highlight">${escapeHtml(result.team.teamName)}</span><span class="slot-group">${getGroupLabel(result.groupIndex)}组</span>`;
 
       // Phase 3: 飞行动画到分组卡片
       requestAnimationFrame(() => {
+        if (!store.drawAnimationState || store.drawAnimationState.generation !== gen) return;
+
         const targetCard = document.getElementById(`group-${result.groupIndex}`);
         const targetBody = document.getElementById(`group-body-${result.groupIndex}`);
 
         if (!targetCard || !targetBody) {
-          drawState.nextTimer = setTimeout(drawNextTeam, 200);
+          store.drawAnimationState.nextTimer = setTimeout(drawNextTeam, 200);
           return;
         }
 
-        drawState.flyControl = flyElement({
+        store.drawAnimationState.flyControl = flyElement({
           source: slot,
           target: targetCard,
           text: result.team.teamName,
           highlightTarget: targetCard,
-          guardFn: () => !!drawState,
+          guardFn: () => store.drawAnimationState && store.drawAnimationState.generation === gen,
           onLand: () => {
-            if (!drawState) return;
+            if (!store.drawAnimationState || store.drawAnimationState.generation !== gen) return;
 
             const item = createTeamItem(result.team);
             insertTeamItem(targetBody, item);
@@ -368,11 +366,11 @@ function drawNextTeam() {
             addDrawResultRow(result.team, result.team.drawOrder);
             updateDrawStatus();
 
-            drawState.phase = 'idle';
+            store.drawAnimationState.phase = 'idle';
 
-            if (drawState.pendingPause) {
-              drawState.pendingPause = false;
-              drawState.isPaused = true;
+            if (store.drawAnimationState.pendingPause) {
+              store.drawAnimationState.pendingPause = false;
+              store.drawAnimationState.isPaused = true;
               slot.classList.remove('active');
               slot.innerHTML = IDLE_SLOT_HTML;
               const pauseBtn = document.getElementById('start-draw-btn');
@@ -381,7 +379,7 @@ function drawNextTeam() {
               return;
             }
 
-            drawState.nextTimer = setTimeout(drawNextTeam, 200);
+            store.drawAnimationState.nextTimer = setTimeout(drawNextTeam, 200);
           }
         });
       });
@@ -396,14 +394,14 @@ export function finishDraw() {
     store.projectsData[store.currentProject].drawCompleted = true;
   }
 
-  if (drawState) {
-    drawState.isComplete = true;
-    drawState.phase = 'idle';
+  if (store.drawAnimationState) {
+    store.drawAnimationState.isComplete = true;
+    store.drawAnimationState.phase = 'idle';
   }
 
   const slot = document.getElementById('draw-slot');
   slot.classList.remove('active');
-  slot.innerHTML = '<span class="slot-team">✓ 抽签完成！</span>';
+  slot.innerHTML = COMPLETE_SLOT_HTML;
 
   const btn = document.getElementById('start-draw-btn');
   btn.innerHTML = '<span class="btn-icon">✅</span>抽签完成';
@@ -438,7 +436,7 @@ export function resetDraw() {
     });
 
     store.drawAlgorithm = null;
-    drawState = null;
+    store.drawAnimationState = null;
 
     initGroupsDisplay();
     renderDrawResultTable();
@@ -464,38 +462,20 @@ export function resetDraw() {
 }
 
 export function pauseDrawAnimation() {
-  if (!drawState || drawState.isPaused || drawState.isComplete) return;
-
-  if (drawState.phase === 'selected') {
-    drawState.pendingPause = true;
-    return;
+  if (!store.drawAnimationState) return;
+  if (pauseAnimState(store.drawAnimationState)) {
+    const slot = document.getElementById('draw-slot');
+    slot.classList.remove('active');
+    slot.innerHTML = IDLE_SLOT_HTML;
+    const btn = document.getElementById('start-draw-btn');
+    btn.innerHTML = '<span class="btn-icon">▶️</span>继续抽签';
+    btn.className = 'btn btn-primary btn-large';
   }
-
-  drawState.isPaused = true;
-  drawState.phase = 'idle';
-  if (drawState.flashControl) drawState.flashControl.cancel();
-  if (drawState.flyControl) drawState.flyControl.cancel();
-  clearTimeout(drawState.nextTimer);
-  drawState.flashControl = null;
-  drawState.flyControl = null;
-  drawState.nextTimer = null;
-
-  const slot = document.getElementById('draw-slot');
-  slot.classList.remove('active');
-  slot.innerHTML = IDLE_SLOT_HTML;
-
-  const btn = document.getElementById('start-draw-btn');
-  btn.innerHTML = '<span class="btn-icon">▶️</span>继续抽签';
-  btn.className = 'btn btn-primary btn-large';
 }
 
 export function stopDrawAnimation() {
-  if (drawState) {
-    if (drawState.flashControl) drawState.flashControl.cancel();
-    if (drawState.flyControl) drawState.flyControl.cancel();
-    clearTimeout(drawState.nextTimer);
-  }
-  drawState = null;
+  stopAnimState(store.drawAnimationState);
+  store.drawAnimationState = null;
 }
 
 export function restoreDrawDisplay() {
@@ -524,8 +504,8 @@ function restoreDrawUI() {
     document.getElementById('reset-draw-btn').disabled = false;
     document.getElementById('final-export-btn').disabled = false;
     slot.classList.remove('active');
-    slot.innerHTML = '<span class="slot-team">✓ 抽签完成！</span>';
-  } else if (drawState && drawState.isPaused) {
+    slot.innerHTML = COMPLETE_SLOT_HTML;
+  } else if (store.drawAnimationState && store.drawAnimationState.isPaused) {
     btn.innerHTML = '<span class="btn-icon">▶️</span>继续抽签';
     btn.className = 'btn btn-primary btn-large';
     btn.disabled = false;

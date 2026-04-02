@@ -1,5 +1,7 @@
 // Startup page logic
 
+import { isSafeImageDataUri } from './utils.js';
+
 export function startDrawSystem() {
   const welcomePage = document.getElementById('welcome-page');
   const mainApp = document.getElementById('main-app');
@@ -16,6 +18,8 @@ export async function changeBackground() {
   const result = await window.electronAPI.openImageDialog();
 
   if (!result.canceled && result.dataUri) {
+    if (!isSafeImageDataUri(result.dataUri)) return;
+
     const welcomePage = document.getElementById('welcome-page');
     welcomePage.style.backgroundImage = `url('${result.dataUri}')`;
 
@@ -29,8 +33,10 @@ export async function changeBackground() {
 
 export function loadCustomBackground() {
   const saved = localStorage.getItem('customBackground');
-  if (saved) {
+  if (saved && isSafeImageDataUri(saved)) {
     const welcomePage = document.getElementById('welcome-page');
     welcomePage.style.backgroundImage = `url('${saved}')`;
+  } else if (saved) {
+    localStorage.removeItem('customBackground');
   }
 }

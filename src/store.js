@@ -28,6 +28,7 @@ export const store = {
   sheetNames: [],
 
   drawOrderState: null,
+  drawAnimationState: null,
 
   isGeneratingOrder: false,
 };

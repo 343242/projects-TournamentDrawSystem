@@ -28,13 +28,14 @@ function updateUIForProject() {
   if (!store.currentProject) return;
 
   const project = store.projectsData[store.currentProject];
+  const el = (id) => document.getElementById(id);
 
   // 更新统计信息
-  document.getElementById('team-count').value = project.teams.length;
-  document.getElementById('total-teams-display').textContent = project.teams.length;
+  el('team-count')?.value = project.teams.length;
+  el('total-teams-display')?.textContent = project.teams.length;
 
   const groupCount = project.teams.length > 0 ? (project.groupCount || DEFAULT_GROUP_COUNT) : 0;
-  const groupCountDisplay = document.getElementById('group-count-display');
+  const groupCountDisplay = el('group-count-display');
   if (groupCountDisplay) groupCountDisplay.textContent = project.teams.length > 0 ? groupCount : '-';
 
   const groupCountBtn = document.querySelector('[data-action="update-group-count"]');
@@ -42,32 +43,34 @@ function updateUIForProject() {
 
   renderTeamTable();
 
-  document.getElementById('next-settings-btn').disabled = project.teams.length === 0;
-  document.getElementById('next-order-btn').disabled = !project.drawOrderGenerated;
+  el('next-settings-btn')?.disabled = project.teams.length === 0;
+  el('next-order-btn')?.disabled = !project.drawOrderGenerated;
 
   if (project.drawOrderGenerated || project.teams.some(t => t.drawOrder > 0)) {
     renderOrderTable();
   } else {
     const orderTbody = document.querySelector('#order-table tbody');
-    orderTbody.innerHTML = '<tr class="empty-row"><td colspan="4">请先生成抽签顺序</td></tr>';
+    if (orderTbody) orderTbody.innerHTML = '<tr class="empty-row"><td colspan="4">请先生成抽签顺序</td></tr>';
   }
 
   updateOrderStatus();
 
   // Update order button state
-  const genBtn = document.getElementById('generate-order-btn');
-  if (project.drawOrderGenerated) {
-    genBtn.disabled = true;
-    genBtn.innerHTML = '<span class="btn-icon">✅</span>抽签完成';
-    genBtn.className = 'btn btn-success btn-large';
-  } else if (project.drawOrderSequence) {
-    genBtn.disabled = false;
-    genBtn.innerHTML = '<span class="btn-icon">▶️</span>继续抽签';
-    genBtn.className = 'btn btn-primary btn-large';
-  } else {
-    genBtn.disabled = false;
-    genBtn.innerHTML = '<span class="btn-icon">🎲</span>启动抽签';
-    genBtn.className = 'btn btn-success btn-large';
+  const genBtn = el('generate-order-btn');
+  if (genBtn) {
+    if (project.drawOrderGenerated) {
+      genBtn.disabled = true;
+      genBtn.innerHTML = '<span class="btn-icon">✅</span>抽签完成';
+      genBtn.className = 'btn btn-success btn-large';
+    } else if (project.drawOrderSequence) {
+      genBtn.disabled = false;
+      genBtn.innerHTML = '<span class="btn-icon">▶️</span>继续抽签';
+      genBtn.className = 'btn btn-primary btn-large';
+    } else {
+      genBtn.disabled = false;
+      genBtn.innerHTML = '<span class="btn-icon">🎲</span>启动抽签';
+      genBtn.className = 'btn btn-success btn-large';
+    }
   }
 
   if (project.drawCompleted && store.drawAlgorithm) {
@@ -75,41 +78,46 @@ function updateUIForProject() {
     restoreDrawDisplay();
     renderDrawResultTable();
     updateDrawStatus();
-    const slot = document.getElementById('draw-slot');
-    slot.classList.remove('active');
-    slot.innerHTML = '<span class="slot-team">✓ 抽签完成！</span>';
-    document.getElementById('start-draw-btn').disabled = true;
-    document.getElementById('reset-draw-btn').disabled = false;
-    document.getElementById('final-export-btn').disabled = false;
+    const slot = el('draw-slot');
+    slot?.classList.remove('active');
+    if (slot) slot.innerHTML = '<span class="slot-team">✓ 抽签完成！</span>';
+    el('start-draw-btn')?.disabled = true;
+    el('reset-draw-btn')?.disabled = false;
+    el('final-export-btn')?.disabled = false;
   } else if (store.drawAlgorithm && project.teams.some(t => t.group > 0)) {
     initGroupsDisplay();
     restoreDrawDisplay();
     renderDrawResultTable();
     updateDrawStatus();
-    const slot = document.getElementById('draw-slot');
-    slot.classList.remove('active');
-    slot.innerHTML = '<span class="slot-text">等待抽签</span>';
-    document.getElementById('start-draw-btn').disabled = false;
-    document.getElementById('start-draw-btn').innerHTML = '<span class="btn-icon">▶️</span>继续抽签';
-    document.getElementById('start-draw-btn').className = 'btn btn-primary btn-large';
-    document.getElementById('reset-draw-btn').disabled = false;
-    document.getElementById('final-export-btn').disabled = true;
+    const slot = el('draw-slot');
+    slot?.classList.remove('active');
+    if (slot) slot.innerHTML = '<span class="slot-text">等待抽签</span>';
+    const startBtn = el('start-draw-btn');
+    if (startBtn) {
+      startBtn.disabled = false;
+      startBtn.innerHTML = '<span class="btn-icon">▶️</span>继续抽签';
+      startBtn.className = 'btn btn-primary btn-large';
+    }
+    el('reset-draw-btn')?.disabled = false;
+    el('final-export-btn')?.disabled = true;
   } else {
     if (project.groupCount > 0 && project.teams.length > 0) {
       initGroupsDisplay();
     } else {
-      document.getElementById('groups-container').innerHTML = '';
+      const gc = el('groups-container');
+      if (gc) gc.innerHTML = '';
     }
     renderDrawResultTable();
     updateDrawStatus();
-    document.getElementById('draw-slot').classList.remove('active');
-    document.getElementById('draw-slot').innerHTML = '<span class="slot-text">抽签队伍</span><br><span class="slot-text"><b>等待抽签</b></span>';
-    document.getElementById('start-draw-btn').disabled = project.teams.length === 0;
-    document.getElementById('reset-draw-btn').disabled = true;
-    document.getElementById('final-export-btn').disabled = true;
+    const slot = el('draw-slot');
+    slot?.classList.remove('active');
+    if (slot) slot.innerHTML = '<span class="slot-text">抽签队伍</span><br><span class="slot-text"><b>等待抽签</b></span>';
+    el('start-draw-btn')?.disabled = project.teams.length === 0;
+    el('reset-draw-btn')?.disabled = true;
+    el('final-export-btn')?.disabled = true;
   }
 
-  document.getElementById('export-btn').disabled = !project.drawCompleted;
+  el('export-btn')?.disabled = !project.drawCompleted;
 }
 
 function clearData() {
@@ -126,13 +134,15 @@ function clearData() {
     store.drawCompleted = false;
     store.drawOrderState = null;
 
-    document.getElementById('team-count').value = '0';
-    document.getElementById('total-teams-display').textContent = '0';
-    const groupCountDisplay = document.getElementById('group-count-display');
+    const el = (id) => document.getElementById(id);
+
+    el('team-count')?.value = '0';
+    el('total-teams-display')?.textContent = '0';
+    const groupCountDisplay = el('group-count-display');
     if (groupCountDisplay) groupCountDisplay.textContent = '-';
-    document.getElementById('selected-file').textContent = '';
-    document.getElementById('next-settings-btn').disabled = true;
-    document.getElementById('export-btn').disabled = true;
+    el('selected-file')?.textContent = '';
+    el('next-settings-btn')?.disabled = true;
+    el('export-btn')?.disabled = true;
 
     const groupCountBtn = document.querySelector('[data-action="update-group-count"]');
     if (groupCountBtn) groupCountBtn.disabled = true;
@@ -144,28 +154,31 @@ function clearData() {
 
     // Reset order page
     const orderTbody = document.querySelector('#order-table tbody');
-    orderTbody.innerHTML = '<tr class="empty-row"><td colspan="4">请先在"抽签设置"页面上传数据</td></tr>';
-    const genBtn = document.getElementById('generate-order-btn');
-    genBtn.disabled = false;
-    genBtn.innerHTML = '<span class="btn-icon">🎲</span>启动抽签';
-    genBtn.className = 'btn btn-success btn-large';
-    document.getElementById('next-order-btn').disabled = true;
+    if (orderTbody) orderTbody.innerHTML = '<tr class="empty-row"><td colspan="4">请先在"抽签设置"页面上传数据</td></tr>';
+    const genBtn = el('generate-order-btn');
+    if (genBtn) {
+      genBtn.disabled = false;
+      genBtn.innerHTML = '<span class="btn-icon">🎲</span>启动抽签';
+      genBtn.className = 'btn btn-success btn-large';
+    }
+    el('next-order-btn')?.disabled = true;
     updateOrderStatus();
 
     // Reset draw page
-    document.getElementById('groups-container').innerHTML = '';
+    const gc = el('groups-container');
+    if (gc) gc.innerHTML = '';
     const drawTbody = document.querySelector('#draw-result-table tbody');
-    drawTbody.innerHTML = '<tr class="empty-row"><td colspan="4">请先开始抽签</td></tr>';
-    const slot = document.getElementById('draw-slot');
-    slot.classList.remove('active');
-    slot.innerHTML = '<span class="slot-text">抽签队伍</span><br><span class="slot-text"><b>等待抽签</b></span>';
-    const drawStatusLabel = document.getElementById('draw-status-label');
+    if (drawTbody) drawTbody.innerHTML = '<tr class="empty-row"><td colspan="4">请先开始抽签</td></tr>';
+    const slot = el('draw-slot');
+    slot?.classList.remove('active');
+    if (slot) slot.innerHTML = '<span class="slot-text">抽签队伍</span><br><span class="slot-text"><b>等待抽签</b></span>';
+    const drawStatusLabel = el('draw-status-label');
     if (drawStatusLabel) drawStatusLabel.textContent = '--';
-    const drawStatusCount = document.getElementById('draw-status-count');
+    const drawStatusCount = el('draw-status-count');
     if (drawStatusCount) drawStatusCount.textContent = '剩余: -- 支';
-    document.getElementById('start-draw-btn').disabled = true;
-    document.getElementById('reset-draw-btn').disabled = true;
-    document.getElementById('final-export-btn').disabled = true;
+    el('start-draw-btn')?.disabled = true;
+    el('reset-draw-btn')?.disabled = true;
+    el('final-export-btn')?.disabled = true;
   });
 }
 
@@ -186,8 +199,6 @@ registerPageLeave('order', pauseOrderDraw);
 // ========== Initialize ==========
 
 document.addEventListener('DOMContentLoaded', () => {
-  console.log('大赛抽签系统已加载');
-
   document.addEventListener('click', (event) => {
     const button = event.target.closest('[data-action]');
     if (!button) return;

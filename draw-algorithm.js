@@ -10,7 +10,7 @@
 
 class DrawAlgorithm {
   constructor(teams, groupCount) {
-    this.teams = teams;
+    this.teams = teams.map(t => ({ ...t }));
     this.groupCount = groupCount;
     this.groups = [];
     this.remainingTeams = [];
@@ -68,7 +68,7 @@ class DrawAlgorithm {
 
     // 过滤掉已有同校队伍的组（除非该学校队伍数超过分组数）
     const schoolTeamCount = this.teams.filter(t => t.school === team.school).length;
-    // FIX: 改为 >= 确保边界条件正确处理
+    // When a school has as many or more teams than groups, same-school placement is unavoidable
     const allowSameSchool = schoolTeamCount >= this.groupCount;
 
     return stats.filter(stat => {
@@ -276,7 +276,7 @@ class DrawAlgorithm {
       group.forEach(team => {
         if (schools[team.school]) {
           const schoolTeamCount = this.teams.filter(t => t.school === team.school).length;
-          // FIX: 改为 >= 边界条件
+          // Only flag if same-school could have been avoided
           if (schoolTeamCount < this.groupCount) {
             issues.push(`第${index + 1}组存在同校队伍: ${team.school}`);
           }

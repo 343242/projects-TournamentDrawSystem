@@ -1,5 +1,11 @@
 // 纯工具函数
 
+const SAFE_DATA_URI_RE = /^data:image\/[a-z]+;base64,[a-zA-Z0-9+/=]+$/;
+
+export function isSafeImageDataUri(str) {
+  return typeof str === 'string' && SAFE_DATA_URI_RE.test(str);
+}
+
 export function escapeHtml(str) {
   const div = document.createElement('div');
   div.appendChild(document.createTextNode(str));

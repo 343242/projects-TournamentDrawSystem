@@ -207,6 +207,7 @@ function createSettingsDom(groupCountValue) {
 const root = path.join(__dirname, '..');
 const drawAlgorithmModule = loadModule(path.join(root, 'draw-algorithm.js'));
 const DrawAlgorithm = drawAlgorithmModule.default;
+const animationHelpers = loadModule(path.join(root, 'src/animation-helpers.js'));
 
 function testRestoreRebuildsGroups() {
   const teams = [
@@ -248,6 +249,7 @@ function testStartDrawAnimationContinuesFlowAndPreservesDrawOrder() {
       './utils.js': { escapeHtml: (value) => String(value) },
       './events.js': { eventBus: { on: () => {}, off: () => {}, emit: () => {} } },
       './animation.js': { flyElement: () => {}, flashRandomNames: () => {} },
+      './animation-helpers.js': animationHelpers,
       '../draw-algorithm.js': { default: DrawAlgorithm },
     },
     {
