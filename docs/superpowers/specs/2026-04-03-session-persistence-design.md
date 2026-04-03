@@ -1,744 +1,294 @@
 # Session Persistence Design
 
-**Date:** 2026-04-03
-**Status:** Draft - Pending Review
-**Author:** Sisyphus (AI Assistant)
+## Goal
 
-## Summary
+Add durable, low-intrusion data persistence to the Electron lottery application so the app can automatically restore the latest working state after restart, crash, or forced termination.
 
-Add automatic session persistence to restore application state across restarts. The implementation follows the existing intent-based IPC security pattern with minimal code intrusion—three new IPC handlers, one new renderer module, and targeted integration points across existing modules.
+## Scope
 
-## Problem Statement
+This design covers:
 
-Users currently lose all application state when the app closes. Tournament draw progress, imported project data, and UI state must be manually recreated on each restart. This creates friction for users running multi-day tournaments or needing to reopen the app after accidental closure.
+- Persisting runtime session data to disk automatically
+- Restoring the last session on app startup
+- Recovering partial progress for draw-order generation and group drawing
+- Restoring the last active page and bypassing the welcome gate when a prior session exists
 
-## Goals
+This design does not cover:
 
-1. **Automatic restoration** - App state restores on startup without user action
-2. **Minimal intrusion** - Small, focused changes to existing codebase
-3. **Security preservation** - Maintain intent-based IPC pattern (main process owns file I/O)
-4. **Explicit boundaries** - Clear separation between durable state and transient runtime objects
-5. **Graceful degradation** - Corrupted or missing session files don't block app startup
+- User-managed save/open of multiple sessions
+- Cloud sync or shared storage
+- Persisting live timers, DOM state, or animation controller objects
+- Replacing the existing `localStorage` background-image behavior
 
-## Non-Goals
+## Current State
 
-1. **Manual save/load** - No user-facing "Save Progress" or "Load Progress" buttons
-2. **Multiple sessions** - Single active session per user
-3. **Cloud sync** - Local persistence only
-4. **Undo history** - Not persisting undo/redo stacks
+The app is a single-window Electron application. Runtime state currently lives in renderer memory through `src/store.js` and page modules.
+
+Relevant state today:
+
+- `store.sheetNames`
+- `store.projectsData`
+- `store.currentProject`
+- `store.teamsData`
+- `store.currentFilePath` (actually used as display file name)
+- per-team `drawOrder` and `group`
+- per-project `groupCount`, `drawOrderGenerated`, `drawOrderSequence`, `drawOrderProgress`, `drawCompleted`
+
+Current persistence is limited to the welcome-page custom background in renderer `localStorage`.
+
+## Chosen Approach
+
+Use a single JSON session file stored in Electron's `app.getPath('userData')`, with file I/O owned by the main process and accessed from the renderer through preload-exposed IPC methods.
+
+This is chosen because it:
+
+- keeps persistence outside the untrusted renderer
+- avoids adding a database or external dependency
+- preserves the existing renderer state model with minimal intrusion
+- supports crash-safe recovery by writing snapshots during user actions, not only on clean exit
 
 ## Architecture
 
-### Components Overview
+### Main Process Responsibilities
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│                      Renderer Process                        │
-│                                                              │
-│  ┌──────────────┐        ┌─────────────────────────┐        │
-│  │   store.js   │◄───────┤ session-persistence.js  │        │
-│  │  (state)     │        │ - serialize/deserialize│        │
-│  └──────────────┘        │ - save triggers         │        │
-│         ▲                │ - load on startup       │        │
-│         │                └─────────────────────────┘        │
-│         │                         │                          │
-│         │                         ▼                          │
-│  ┌──────┴─────────┐    ┌──────────────────────┐           │
-│  │ Module edits:  │    │ Integration points:   │           │
-│  │ - file-ops     │    │ - processImportedData │           │
-│  │ - settings-page│    │ - updateGroupCount    │           │
-│  │ - order-page   │    │ - generateOrder       │           │
-│  │ - draw-page    │    │ - team assignment     │           │
-│  │ - navigation   │    │ - switchPage          │           │
-│  │ - app.js      │    │ - clearData           │           │
-│  └───────────────┘    └──────────────────────┘           │
-└─────────────────────────────────────────────────────────────┘
-                              │
-                              │ IPC (intent-based)
-                              ▼
-┌─────────────────────────────────────────────────────────────┐
-│                      Main Process                            │
-│                                                              │
-│  ┌──────────────────────────────────────────────────────┐  │
-│  │ IPC Handlers (new):                                    │  │
-│  │ - load-session   → readFile(userData/session.json)    │  │
-│  │ - save-session   → writeFile(userData/session.json)   │  │
-│  │ - clear-session  → unlink(session.json)              │  │
-│  └──────────────────────────────────────────────────────┘  │
-│                                                              │
-│  File Location: app.getPath('userData')/session.json       │
-└─────────────────────────────────────────────────────────────┘
-```
+`main.js` will own session file access and expose three IPC handlers:
 
-### File Changes
+- `load-session`
+- `save-session`
+- `clear-session`
 
-| File | Changes | Lines |
-|------|---------|-------|
-| `main.js` | Add 3 IPC handlers (load/save/clear session) | +62 |
-| `preload.js` | Expose 3 new IPC methods | +3 |
-| `src/store.js` | Add `lastActivePage` field | +3 |
-| `src/session-persistence.js` | New file: serialization logic | +120 |
-| `src/app.js` | Load on startup, save on quit | +15 |
-| **Total** | | **+203 lines** |
+The session file location should be fixed and internal, for example:
 
-## Data Model
+- `${app.getPath('userData')}/session-state.json`
 
-### Persisted Payload Structure
+`save-session` should:
+
+- validate payload shape at a basic level
+- write JSON atomically through a temporary file plus rename
+- return success/failure without exposing filesystem paths to the renderer
+
+`load-session` should:
+
+- return `{ success: true, exists: false }` when no session file exists
+- parse JSON safely
+- return `{ success: false, error }` on malformed or unreadable data
+
+`clear-session` should:
+
+- remove the stored session file if present
+- succeed when the file is already absent
+
+### Preload Responsibilities
+
+`preload.js` will expose narrow APIs such as:
+
+- `loadSession()`
+- `saveSession(data)`
+- `clearSession()`
+
+These are the only persistence interfaces the renderer can access.
+
+### Renderer Responsibilities
+
+Add a dedicated persistence module in `src/`, responsible for:
+
+- converting the current store into a serializable snapshot
+- loading and hydrating saved state back into the store
+- saving state after meaningful user actions
+- handling restore failures gracefully
+
+This module should be the only renderer module that knows the persistence schema.
+
+## Persisted Data Model
+
+Persist one versioned JSON document:
 
 ```json
 {
-  "schemaVersion": 1,
-  "timestamp": "2026-04-03T10:30:00Z",
+  "version": 1,
+  "savedAt": "2026-04-03T12:34:56.000Z",
+  "ui": {
+    "appStarted": true,
+    "activePage": "draw"
+  },
   "session": {
-    "currentFilePath": "tournament-data.xlsx",
-    "currentProject": "象棋比赛",
-    "sheetNames": ["象棋比赛", "围棋比赛"],
+    "currentFileName": "example.xlsx",
+    "currentProject": "项目A",
+    "sheetNames": ["项目A", "项目B"],
     "projectsData": {
-      "象棋比赛": {
+      "项目A": {
         "teams": [
           {
             "id": 1,
-            "teamName": "雄鹰队",
-            "school": "北京一中",
+            "school": "学校A",
+            "teamName": "队伍A",
             "isSeeded": true,
-            "drawOrder": 0,
-            "group": 0
+            "drawOrder": 1,
+            "group": 2
           }
         ],
         "groupCount": 9,
         "drawOrderGenerated": false,
-        "drawOrderSequence": [3, 1, 5, 2, 4],
-        "drawOrderProgress": 0,
+        "drawOrderSequence": [
+          {
+            "id": 1,
+            "school": "学校A",
+            "teamName": "队伍A",
+            "isSeeded": true,
+            "drawOrder": 1,
+            "group": 2
+          }
+        ],
+        "drawOrderProgress": 3,
         "drawCompleted": false
       }
-    },
-    "uiState": {
-      "appStarted": true,
-      "lastActivePage": "draw"
     }
   }
 }
 ```
 
-### What Gets Persisted
-
-✅ **Project Data**
-- `sheetNames` - List of project names from Excel sheets
-- `projectsData` - Object mapping project names to project state
-- `currentProject` - Currently selected project
-- `currentFilePath` - Display name of imported file
-
-✅ **Per-Team State**
-- `id` - Team identifier
-- `teamName` - Team name
-- `school` - School name
-- `isSeeded` - Whether team is seeded
-- `drawOrder` - Order in draw sequence (0 if not drawn)
-- `group` - Assigned group (0 if not assigned)
-
-✅ **Per-Project Progress**
-- `groupCount` - Number of groups
-- `drawOrderGenerated` - Whether draw order has been generated
-- `drawOrderSequence` - Randomized order sequence
-- `drawOrderProgress` - Current position in draw order generation
-- `drawCompleted` - Whether group draw is complete
-
-✅ **UI Continuity**
-- `appStarted` - Whether welcome screen has been dismissed
-- `lastActivePage` - Last active page name (welcome/settings/order/draw)
-
-### What Does NOT Get Persisted
-
-❌ **Transient Runtime Objects**
-- `drawAlgorithm` - Instance reconstructed from team data on restore
-- `drawOrderState` - Animation state machine (transient)
-- `drawAnimationState` - Animation state machine (transient)
-- `isGeneratingOrder` - Flag for in-progress animation
-- Timers, DOM references, event listeners
-
-**Rationale:** Animation state and timers cannot be meaningfully persisted—they must be reconstructed on restore. DrawAlgorithm is reconstructed from persisted team assignments.
-
-## Implementation Details
-
-### 1. Main Process IPC Handlers
-
-**main.js additions:**
-
-```javascript
-let sessionPath;
-
-function getSessionPath() {
-  if (!sessionPath) {
-    sessionPath = path.join(app.getPath('userData'), 'session.json');
-  }
-  return sessionPath;
-}
-
-// Load session on app startup
-ipcMain.handle('load-session', async (event) => {
-  if (!mainWindow || event.senderFrame !== mainWindow.webContents.mainFrame) {
-    return { success: false, error: 'Invalid sender' };
-  }
-  
-  try {
-    const filePath = getSessionPath();
-    if (!fs.existsSync(filePath)) {
-      return { success: true, data: null }; // No session = fresh start
-    }
-    
-    const data = fs.readFileSync(filePath, 'utf-8');
-    const session = JSON.parse(data);
-    return { success: true, data: session };
-  } catch (error) {
-    console.error('Session load failed:', error);
-    return { success: true, data: null }; // Don't block app startup
-  }
-});
-
-// Save session (renderer-initiated)
-ipcMain.handle('save-session', async (event, { session }) => {
-  if (!mainWindow || event.senderFrame !== mainWindow.webContents.mainFrame) {
-    return { success: false, error: 'Invalid sender' };
-  }
-  
-  try {
-    const filePath = getSessionPath();
-    const payload = {
-      schemaVersion: 1,
-      timestamp: new Date().toISOString(),
-      session
-    };
-    fs.writeFileSync(filePath, JSON.stringify(payload, null, 2), 'utf-8');
-    return { success: true };
-  } catch (error) {
-    console.error('Session save failed:', error);
-    return { success: false, error: error.message };
-  }
-});
-
-// Clear session (user clears all data)
-ipcMain.handle('clear-session', async (event) => {
-  if (!mainWindow || event.senderFrame !== mainWindow.webContents.mainFrame) {
-    return { success: false, error: 'Invalid sender' };
-  }
-  
-  try {
-    const filePath = getSessionPath();
-    if (fs.existsSync(filePath)) {
-      fs.unlinkSync(filePath);
-    }
-    return { success: true };
-  } catch (error) {
-    return { success: false, error: error.message };
-  }
-});
-```
-
-**Security verification:**
-- All handlers validate `event.senderFrame === mainWindow.webContents.mainFrame`
-- No file paths exposed to renderer
-- Main process owns all file I/O
-
-### 2. Preload.js API Exposure
-
-**preload.js additions:**
-
-```javascript
-contextBridge.exposeInMainWorld('electronAPI', {
-  // Existing...
-  importExcel: () => ipcRenderer.invoke('import-excel'),
-  exportExcel: (data) => ipcRenderer.invoke('export-excel', data),
-  openImageDialog: () => ipcRenderer.invoke('open-image-dialog'),
-  
-  // New session persistence APIs
-  loadSession: () => ipcRenderer.invoke('load-session'),
-  saveSession: (session) => ipcRenderer.invoke('save-session', { session }),
-  clearSession: () => ipcRenderer.invoke('clear-session')
-});
-```
-
-### 3. Session Persistence Module
-
-**src/session-persistence.js (new file):**
-
-```javascript
-/**
- * Session Persistence Module
- * Serializes application state to JSON for restoration across restarts.
- * 
- * Responsibilities:
- * - Serialize durable state from store
- * - Deserialize session data into store
- * - Debounced save triggers
- * - Schema versioning for forward compatibility
- */
-
-import { DrawAlgorithm } from '../draw-algorithm.js';
-
-const SCHEMA_VERSION = 1;
-const DEBOUNCE_MS = 500;
-
-// Serializer: Extract durable state from store
-export function serializeSession(store) {
-  return {
-    currentFilePath: store.currentFilePath,
-    currentProject: store.currentProject,
-    sheetNames: [...store.sheetNames],
-    projectsData: serializeProjectsData(store.projectsData),
-    uiState: {
-      appStarted: true,
-      lastActivePage: store.lastActivePage || 'welcome'
-    }
-  };
-}
-
-// Deep clone projectsData, excluding computed properties
-function serializeProjectsData(projectsData) {
-  const result = {};
-  for (const [projectName, project] of Object.entries(projectsData)) {
-    result[projectName] = {
-      teams: project.teams.map(team => ({
-        id: team.id,
-        teamName: team.teamName,
-        school: team.school,
-        isSeeded: team.isSeeded,
-        drawOrder: team.drawOrder,
-        group: team.group
-      })),
-      groupCount: project.groupCount,
-      drawOrderGenerated: project.drawOrderGenerated,
-      drawOrderSequence: [...(project.drawOrderSequence || [])],
-      drawOrderProgress: project.drawOrderProgress || 0,
-      drawCompleted: project.drawCompleted
-    };
-  }
-  return result;
-}
-
-// Deserializer: Restore state into store
-export function deserializeSession(sessionData, store) {
-  if (!sessionData) {
-    return false;
-  }
-  
-  // Schema version check
-  if (sessionData.schemaVersion !== SCHEMA_VERSION) {
-    console.warn(`Session schema version mismatch: expected ${SCHEMA_VERSION}, got ${sessionData.schemaVersion}`);
-    // Could add migration logic here in future versions
-    return false;
-  }
-  
-  try {
-    const session = sessionData.session;
-    
-    store.currentFilePath = session.currentFilePath;
-    store.currentProject = session.currentProject;
-    store.sheetNames = [...session.sheetNames];
-    store.projectsData = deserializeProjectsData(session.projectsData);
-    store.lastActivePage = session.uiState?.lastActivePage || null;
-    
-    return true;
-  } catch (error) {
-    console.error('Session deserialization failed:', error);
-    return false;
-  }
-}
-
-function deserializeProjectsData(projectsData) {
-  const result = {};
-  for (const [projectName, project] of Object.entries(projectsData)) {
-    result[projectName] = {
-      teams: project.teams.map(team => ({
-        id: team.id,
-        teamName: team.teamName,
-        school: team.school,
-        isSeeded: team.isSeeded,
-        drawOrder: team.drawOrder || 0,
-        group: team.group || 0
-      })),
-      groupCount: project.groupCount,
-      drawOrderGenerated: project.drawOrderGenerated,
-      drawOrderSequence: project.drawOrderSequence || [],
-      drawOrderProgress: project.drawOrderProgress || 0,
-      drawCompleted: project.drawCompleted
-    };
-  }
-  return result;
-}
-
-// Debounced save to avoid excessive writes
-let saveTimeout;
-export async function saveSessionDebounced(store) {
-  if (saveTimeout) clearTimeout(saveTimeout);
-  
-  return new Promise((resolve) => {
-    saveTimeout = setTimeout(async () => {
-      const session = serializeSession(store);
-      const result = await window.electronAPI.saveSession(session);
-      if (!result.success) {
-        console.error('Failed to save session:', result.error);
-      }
-      resolve(result);
-    }, DEBOUNCE_MS);
-  });
-}
-
-// Immediate save (for app quit scenarios)
-export async function saveSessionImmediate(store) {
-  const session = serializeSession(store);
-  return await window.electronAPI.saveSession(session);
-}
-
-// Load and restore session on app startup
-export async function loadAndRestoreSession(store, eventBus) {
-  const result = await window.electronAPI.loadSession();
-  
-  if (!result.success || !result.data) {
-    return false;
-  }
-  
-  const restored = deserializeSession(result.data, store);
-  
-  if (!restored) {
-    return false;
-  }
-  
-  // Reconstruct DrawAlgorithm instance if needed
-  if (store.currentProject && store.projectsData[store.currentProject]) {
-    const project = store.projectsData[store.currentProject];
-    if (project.teams.length > 0 && project.groupCount > 0) {
-      try {
-        store.drawAlgorithm = new DrawAlgorithm(project.teams, project.groupCount);
-        
-        // Restore draw algorithm state from team assignments
-        project.teams.forEach(team => {
-          if (team.group > 0) {
-            store.drawAlgorithm.assignedTeams.add(team.id);
-          }
-        });
-      } catch (error) {
-        console.error('Failed to reconstruct DrawAlgorithm:', error);
-      }
-    }
-  }
-  
-  return true;
-}
-```
-
-### 4. Integration Points
-
-**Where to trigger saves:**
-
-1. **After importing data (file-ops.js)**
-   ```javascript
-   import { saveSessionDebounced } from './session-persistence.js';
-   
-   // Inside processImportedData(), after setting store data:
-   await saveSessionDebounced(store);
-   ```
-
-2. **After changing group count (settings-page.js)**
-   ```javascript
-   // Inside updateGroupCount(), after updating store:
-   await saveSessionDebounced(store);
-   ```
-
-3. **After switching projects (settings-page.js)**
-   ```javascript
-   // Inside selectProject(), after updating store:
-   await saveSessionDebounced(store);
-   ```
-
-4. **After draw order generation (order-page.js)**
-   ```javascript
-   // Inside generateOrder(), after each team drawn:
-   await saveSessionDebounced(store);
-   ```
-
-5. **After team group assignment (draw-page.js)**
-   ```javascript
-   // After team assigned to group:
-   await saveSessionDebounced(store);
-   ```
-
-6. **After reset draw (draw-page.js)**
-   ```javascript
-   // Inside resetDraw():
-   await saveSessionDebounced(store);
-   ```
-
-7. **After clearing all data (app.js)**
-   ```javascript
-   // Inside clearData(), after clearing store:
-   await window.electronAPI.clearSession();
-   ```
-
-8. **After switching pages (navigation.js)**
-   ```javascript
-   // Inside switchPage(), after page change:
-   store.lastActivePage = pageName;
-   await saveSessionDebounced(store);
-   ```
-
-9. **On app quit (app.js)**
-   ```javascript
-   // Add window close handler:
-   window.addEventListener('beforeunload', async (e) => {
-     await saveSessionImmediate(store);
-   });
-   ```
-
-### 5. Startup Restore Sequence
-
-**app.js initialization:**
-
-```javascript
-import { loadAndRestoreSession } from './session-persistence.js';
-
-async function initializeApp() {
-  // Load session on startup
-  const restored = await loadAndRestoreSession(store, eventBus);
-  
-  if (restored && store.lastActivePage) {
-    // Navigate to last active page
-    switchPage(store.lastActivePage);
-  }
-  
-  // Restore UI state
-  eventBus.emit('updateUIForProject');
-  renderProjectList();
-  updateNavigationState();
-  updateOrderStatus();
-  
-  // ... existing initialization code ...
-}
-
-document.addEventListener('DOMContentLoaded', initializeApp);
-```
-
-### 6. Store.js Modification
-
-**src/store.js additions:**
-
-```javascript
-export const store = {
-  teamsData: [],
-  drawAlgorithm: null,
-  currentFilePath: null,
-  drawCount: 0,
-  
-  // ... existing getters/setters ...
-  
-  projectsData: {},
-  currentProject: null,
-  sheetNames: [],
-  
-  // NEW: Track current page for persistence
-  lastActivePage: null,
-  
-  drawOrderState: null,
-  drawAnimationState: null,
-  
-  isGeneratingOrder: false
-};
-```
-
-## Edge Cases & Error Handling
-
-### 1. Corrupted Session File
-
-**Scenario:** Session file contains malformed JSON.
-
-**Behavior:**
-- `loadSession()` returns `{ success: true, data: null }`
-- App starts fresh without errors
-- Corrupted session logged to console
-
-**Implementation:**
-```javascript
-// In load-session handler:
-try {
-  const data = fs.readFileSync(filePath, 'utf-8');
-  const session = JSON.parse(data);
-  return { success: true, data: session };
-} catch (error) {
-  console.error('Session load failed:', error);
-  return { success: true, data: null }; // Don't block app
-}
-```
-
-### 2. Old Schema Version
-
-**Scenario:** Session file was created with older schema version.
-
-**Behavior:**
-- Version check fails
-- `deserializeSession()` returns `false`
-- App starts fresh
-- Warning logged to console
-
-**Future consideration:** Add migration functions for schema upgrades.
-
-### 3. Missing Session File
-
-**Scenario:** First launch or session manually deleted.
-
-**Behavior:**
-- `loadSession()` returns `{ success: true, data: null }`
-- App starts fresh
-- Normal flow
-
-### 4. DrawAlgorithm Reconstruction Failure
-
-**Scenario:** Teams have group assignments but DrawAlgorithm fails to reconstruct.
-
-**Behavior:**
-- Reconstruction caught in try/catch
-- Session still restored with team data
-- DrawAlgorithm set to `null`
-- User can reset draw and start fresh
-
-### 5. Save Failure During Animation
-
-**Scenario:** Rapid state changes during draw animation.
-
-**Behavior:**
-- Debouncing prevents excessive writes
-- Each save is atomic (overwrite entire file)
-- If save fails, error logged, app continues
-- Next successful save captures latest state
-
-### 6. App Crash Mid-Save
-
-**Scenario:** App crashes while writing session.json.
-
-**Behavior:**
-- File write starts with full payload
-- If crash mid-write, file may be incomplete
-- Next app start: JSON.parse fails → fresh start
-- Use atomic write pattern if needed:
-  ```javascript
-  // Alternative: Write to temp file, then rename
-  const tempPath = filePath + '.tmp';
-  fs.writeFileSync(tempPath, JSON.stringify(payload, null, 2));
-  fs.renameSync(tempPath, filePath);
-  ```
+### Notes On Shape
+
+- The schema intentionally mirrors existing renderer state to minimize transformation logic.
+- `currentFilePath` should be treated as display metadata and persisted as `currentFileName`.
+- `drawOrderSequence` must be persisted because partial order generation currently depends on it for deterministic resume.
+- Team entries inside `drawOrderSequence` should be stored as plain serializable team snapshots, not live references.
+
+## Non-Persisted Runtime State
+
+The following state must not be serialized:
+
+- `store.drawAlgorithm`
+- `store.drawOrderState`
+- `store.drawAnimationState`
+- timers and animation handles
+- DOM markup
+- event bus listeners
+
+These values are runtime-only and must be rebuilt after restore.
+
+## Save Strategy
+
+To satisfy crash/forced-kill recovery, the app must save snapshots during user actions that change durable state.
+
+### Save Triggers
+
+Persist after these events:
+
+- successful Excel import and project parsing
+- project selection change
+- group count update
+- each draw-order progress update that changes `drawOrder`, `drawOrderProgress`, or `drawOrderGenerated`
+- each group draw update that changes a team `group` or `drawCompleted`
+- draw reset
+- clear data
+- page switch
+- transition from welcome page to main app
+
+This keeps the latest meaningful state on disk without requiring a clean shutdown.
+
+### Write Discipline
+
+- Save operations should be fire-and-forget from the renderer, with errors logged and surfaced only when needed.
+- Persistence should be best-effort and not block animations for long periods.
+- If desired during implementation, a tiny debounce can be applied to very chatty writes, but only if it does not materially weaken crash recovery. The default design is immediate saves after state mutations.
+
+## Restore Strategy
+
+On startup:
+
+1. Load custom background from existing `localStorage` logic.
+2. Ask the main process for the saved session.
+3. If no valid session exists, continue with current startup behavior.
+4. If a valid session exists:
+   - hydrate `store.sheetNames`, `store.projectsData`, `store.currentProject`, and display file name
+   - set `store.teamsData` from the selected project
+   - reconstruct `store.drawAlgorithm` when the selected project has teams and a valid `groupCount`
+   - call `drawAlgorithm.restore()` so saved `team.group` values rebuild algorithm state
+   - render UI from hydrated state
+   - if `ui.appStarted` is `true`, hide the welcome page and show the main app
+   - switch to `ui.activePage` if it is one of `settings`, `order`, or `draw` and is currently allowed by navigation rules; otherwise fall back to `settings`
+
+### Resume Semantics
+
+- Partial draw-order sessions resume from saved `drawOrderSequence` plus `drawOrderProgress`.
+- Partial group draws resume from saved team `group` values and reconstructed algorithm state.
+- Running animations must restore as paused/resumable idle state, never as automatically running actions.
+- The user should see the correct next action, such as `继续抽签`, after restore.
+
+## UI Continuity Rules
+
+The persisted UI state is intentionally small:
+
+- whether the user had already entered the main app
+- the last active page
+
+The design does not attempt to persist:
+
+- dialog visibility
+- transient flashing/fly states
+- scroll positions
+
+This is sufficient to meet the requirement for restart continuity while keeping the solution simple and robust.
+
+## Error Handling
+
+### Invalid Or Corrupt Session Data
+
+If loading the session fails because the file is corrupt or incompatible:
+
+- log a warning
+- ignore the saved session
+- continue with a clean in-memory startup
+- clear the invalid session file to prevent repeated failure loops
+
+The app must remain usable even if persistence fails.
+
+### Save Failures
+
+If saving fails:
+
+- log the error in the renderer and/or main process
+- keep the app running with in-memory state
+- do not interrupt the user flow unless repeated failures become a visible product issue
+
+## Security And Intrusion Constraints
+
+- Do not expose raw file paths or unrestricted filesystem APIs to the renderer.
+- Keep persistence behind specific preload methods.
+- Avoid introducing third-party persistence libraries unless implementation reveals a concrete deficiency.
+- Preserve the existing module structure and event-driven UI flow.
 
 ## Testing Strategy
 
-### Unit Tests
+Testing should cover:
 
-**session-persistence.js:**
-- `serializeSession()` correctly extracts durable state
-- `deserializeSession()` restores state into store
-- `serializeProjectsData()` deep clones without computed properties
-- Schema version check rejects mismatched versions
+- serialization of current in-memory state into the persisted envelope
+- hydration of saved data back into store state
+- restore of partial order draw progress
+- restore of partial group draw progress
+- fallback behavior when the session file is missing or corrupt
+- page restore behavior and invalid-page fallback
 
-**Main process IPC handlers:**
-- `load-session` returns null for missing file
-- `load-session` handles corrupted JSON
-- `save-session` validates sender frame
-- `clear-session` removes file
+Tests can be added at two levels:
 
-### Integration Tests
+- unit tests for serializer/hydrator logic
+- light integration tests for main-process load/save helpers where practical
 
-**Restore flow:**
-1. Import Excel file
-2. Navigate to draw page
-3. Close app
-4. Reopen app
-5. Verify: project loaded, page restored, UI state correct
+## Implementation Notes
 
-**Clear flow:**
-1. Import Excel file
-2. Generate draw order
-3. Clear all data
-4. Close app
-5. Reopen app
-6. Verify: fresh start, no session file
+Expected low-intrusion changes:
 
-**Multi-project:**
-1. Import Excel with multiple sheets
-2. Switch between projects
-3. Close app
-4. Reopen app
-5. Verify: last project restored
+- add one new renderer persistence module
+- add a few persistence calls at existing mutation points
+- slightly extend navigation state to explicitly track current page in store or through exported getter/setter access
+- add main-process IPC handlers and preload methods
 
-### Manual Testing Checklist
+No database, no ORM, and no broad refactor is required.
 
-- [ ] Import Excel, restart app → project restores
-- [ ] Set group count, restart → group count restores
-- [ ] Generate draw order partially, restart → progress restores
-- [ ] Complete draw, restart → final state restores
-- [ ] Switch page, restart → last page restores
-- [ ] Clear data, restart → fresh start
-- [ ] Corrupt session.json → app starts fresh
-- [ ] Delete session.json → app starts fresh
+## Open Decisions Already Resolved
 
-## Performance Considerations
-
-### File Size
-
-**Expected session.json size:**
-- 1 project with 100 teams ≈ 15 KB
-- 10 projects with 100 teams each ≈ 150 KB
-- Very small compared to Electron app overhead
-
-### Save Frequency
-
-**Debouncing strategy:**
-- 500ms debounce on state changes
-- Immediate save on app quit
-- Typical user workflow: 1 save per action, not continuous writes
-
-**Optimization opportunities:**
-- Only save dirty fields (future optimization)
-- Batch related state changes before save
-
-### Startup Performance
-
-**Load time:**
-- File read: <10ms for typical session size
-- JSON parse: <5ms
-- DrawAlgorithm reconstruction: <50ms for 100 teams
-- Total overhead: <100ms on startup
-
-## Future Enhancements
-
-1. **Schema Migration** - Add version-based migration for backward compatibility
-2. **Session History** - Keep last N session files for rollback
-3. **Export Session** - Allow users to export/import session files manually
-4. **Cloud Sync** - Optional cloud backup via Electron's remote API
-5. **Auto-save UI Indicator** - Show "Last saved: 2s ago" in status bar
-
-## Security Review
-
-✅ **Intent-based IPC pattern maintained**
-- Main process validates sender frame on every IPC call
-- No file paths exposed to renderer
-
-✅ **No new attack surface**
-- Session file stored in userData (Electron-managed directory)
-- JSON serialization only (no code execution)
-- Schema version check prevents unexpected structure
-
-✅ **Data integrity**
-- Debouncing prevents race conditions
-- Atomic file write (or use temp+rename pattern)
-- Graceful degradation on corruption
-
-## Open Questions
-
-1. **Q:** Should we show a notification when session restores?  
-   **A:** No, automatic restoration is seamless by design. Users expect continuity.
-
-2. **Q:** Should we persist background image preference?  
-   **A:** Out of scope for this feature. Could be added to `uiState` if needed.
-
-3. **Q:** What about in-progress draw order animations?  
-   **A:** Not persisted. Animation restarts from last saved progress on restore.
-
-## Conclusion
-
-This design adds session persistence with minimal intrusion (~200 lines of new code), following existing architecture patterns. The intent-based IPC security model is preserved, clear boundaries separate durable from transient state, and graceful degradation ensures corrupted sessions never block app startup.
+- persistence scope: automatic restore of the last session only
+- UI continuity: restore the last active page
+- recovery behavior: must survive crash and forced termination
+- implementation approach: single JSON session file in Electron `userData`
