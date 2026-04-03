@@ -4,7 +4,7 @@ import { store, DEFAULT_GROUP_COUNT, MIN_GROUP_COUNT } from './store.js';
 import { eventBus } from './events.js';
 import { showAlertDialog, showConfirmDialog } from './dialog.js';
 import { switchPage, goToNext, goToPrev, updateNavigationState, updatePageHeaders, registerPageInit, registerPageLeave, resolveAccessiblePage } from './navigation.js';
-import { startDrawSystem, changeBackground, loadCustomBackground, restoreMainApp } from './welcome.js';
+import { startDrawSystem, changeBackground, loadCustomBackground, restoreMainApp, returnToLaunchScreen } from './welcome.js';
 import { renderTeamTable, updateGroupCount, renderProjectList, selectProject } from './settings-page.js';
 import { generateOrder, renderOrderTable, updateOrderStatus, stopOrderAnimation, pauseOrderDraw } from './order-page.js';
 import { initGroupsDisplay, startDrawAnimation, resetDraw, createTeamItem, renderDrawResultTable, updateDrawStatus, pauseDrawAnimation, stopDrawAnimation, restoreDrawDisplay, initDrawPage } from './draw-page.js';
@@ -305,6 +305,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       case 'start-draw-system': startDrawSystem(); break;
       case 'change-background': changeBackground(); break;
       case 'exit-app': exitApp(); break;
+      case 'return-launch': returnToLaunchScreen(); break;
       case 'switch-page': switchPage(page); break;
       case 'select-file': selectFile(); break;
       case 'export-result': exportResult(); break;

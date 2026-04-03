@@ -40,6 +40,24 @@ export function restoreMainApp() {
   showMainApp({ immediate: true });
 }
 
+export function returnToLaunchScreen() {
+  const welcomePage = document.getElementById('welcome-page');
+  const mainApp = document.getElementById('main-app');
+
+  if (!welcomePage || !mainApp) {
+    return;
+  }
+
+  store.appStarted = false;
+  welcomePage.classList.remove('fade-out');
+  welcomePage.style.display = '';
+  mainApp.classList.add('hidden');
+
+  void saveSessionNow(store).catch((error) => {
+    console.warn('Failed to persist launch screen state:', error);
+  });
+}
+
 export async function changeBackground() {
   const result = await window.electronAPI.openImageDialog();
 
