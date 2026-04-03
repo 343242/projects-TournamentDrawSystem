@@ -6,6 +6,7 @@ import { escapeHtml } from './utils.js';
 import { eventBus } from './events.js';
 import { flyElement, flashRandomNames } from './animation.js';
 import { createAnimationState, cancelActiveAnimations, pauseAnimState, stopAnimState } from './animation-helpers.js';
+import { saveSessionDebounced } from './session-persistence.js';
 import DrawAlgorithm from '../draw-algorithm.js';
 
 const getGroupLabel = (i) => String.fromCharCode(65 + i);
@@ -269,6 +270,7 @@ export function startDrawAnimation() {
 
   if (!isResuming) {
     renderSeededTeams(store.drawAlgorithm.getGroups());
+    saveSessionDebounced(store);
   }
 
   drawNextTeam();
@@ -327,6 +329,7 @@ function drawNextTeam() {
       store.drawCount++;
       result.team.group = result.groupIndex + 1;
       syncGroupToStore(result.team);
+      saveSessionDebounced(store);
 
       store.drawAnimationState.phase = 'selected';
 
@@ -421,6 +424,7 @@ export function finishDraw() {
 
   eventBus.emit('renderTeamTable');
   eventBus.emit('renderProjectList');
+  saveSessionDebounced(store);
 }
 
 export function resetDraw() {
@@ -458,6 +462,7 @@ export function resetDraw() {
     document.getElementById('reset-draw-btn').disabled = true;
     document.getElementById('final-export-btn').disabled = true;
     document.getElementById('export-btn').disabled = true;
+    saveSessionDebounced(store);
   });
 }
 

@@ -212,3 +212,105 @@ ipcMain.handle('open-image-dialog', async (event) => {
     return { canceled: true, error: error.message };
   }
 });
+
+// Session persistence: file path helper
+let sessionPath;
+
+function getSessionPath() {
+  if (!sessionPath) {
+    sessionPath = path.join(app.getPath('userData'), 'session-state.json');
+  }
+  return sessionPath;
+}
+
+function isValidSessionDocument(session) {
+  return session !== null && typeof session === 'object' && !Array.isArray(session);
+}
+
+function clearSessionFile(filePath) {
+  if (fs.existsSync(filePath)) {
+    fs.unlinkSync(filePath);
+  }
+}
+
+// Load session on app startup
+ipcMain.handle('load-session', async (event) => {
+  if (!mainWindow || event.senderFrame !== mainWindow.webContents.mainFrame) {
+    return { success: false, error: 'Invalid sender' };
+  }
+
+  try {
+    const filePath = getSessionPath();
+    if (!fs.existsSync(filePath)) {
+      return { success: true, exists: false, data: null };
+    }
+
+    const data = fs.readFileSync(filePath, 'utf-8');
+    if (!data.trim()) {
+      throw new Error('Session file is empty');
+    }
+
+    const session = JSON.parse(data);
+    if (!isValidSessionDocument(session)) {
+      throw new Error('Session file does not contain a valid session document');
+    }
+
+    return { success: true, exists: true, data: session };
+  } catch (error) {
+    console.error('Session load failed:', error);
+    try {
+      clearSessionFile(getSessionPath());
+    } catch (cleanupError) {
+      console.error('Session cleanup failed:', cleanupError);
+    }
+    return { success: true, exists: false, data: null };
+  }
+});
+
+// Save session (renderer-initiated)
+ipcMain.handle('save-session', async (event, session) => {
+  if (!mainWindow || event.senderFrame !== mainWindow.webContents.mainFrame) {
+    return { success: false, error: 'Invalid sender' };
+  }
+
+  let tempPath;
+
+  try {
+    if (!isValidSessionDocument(session)) {
+      return { success: false, error: 'Invalid session payload' };
+    }
+
+    const filePath = getSessionPath();
+    tempPath = `${filePath}.tmp`;
+    fs.writeFileSync(tempPath, JSON.stringify(session, null, 2), 'utf-8');
+    fs.renameSync(tempPath, filePath);
+    return { success: true };
+  } catch (error) {
+    if (tempPath && fs.existsSync(tempPath)) {
+      try {
+        fs.unlinkSync(tempPath);
+      } catch (cleanupError) {
+        console.error('Session temp cleanup failed:', cleanupError);
+      }
+    }
+    console.error('Session save failed:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+// Clear session (user clears all data)
+ipcMain.handle('clear-session', async (event) => {
+  if (!mainWindow || event.senderFrame !== mainWindow.webContents.mainFrame) {
+    return { success: false, error: 'Invalid sender' };
+  }
+
+  try {
+    const filePath = getSessionPath();
+    if (fs.existsSync(filePath)) {
+      fs.unlinkSync(filePath);
+    }
+    return { success: true };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+});

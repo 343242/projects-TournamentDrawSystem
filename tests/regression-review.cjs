@@ -250,6 +250,7 @@ function testStartDrawAnimationContinuesFlowAndPreservesDrawOrder() {
       './events.js': { eventBus: { on: () => {}, off: () => {}, emit: () => {} } },
       './animation.js': { flyElement: () => {}, flashRandomNames: () => {} },
       './animation-helpers.js': animationHelpers,
+      './session-persistence.js': { saveSessionDebounced: () => {} },
       '../draw-algorithm.js': { default: DrawAlgorithm },
     },
     {
@@ -302,6 +303,7 @@ function testUpdateGroupCountClearsExistingGroups() {
       './events.js': { eventBus: { on: () => {}, off: () => {}, emit: () => {} } },
       './order-page.js': { stopOrderAnimation: () => {} },
       './draw-page.js': { stopDrawAnimation: () => {} },
+      './session-persistence.js': { saveSessionDebounced: () => {} },
       '../draw-algorithm.js': { default: DrawAlgorithm },
     },
     {
@@ -351,6 +353,7 @@ function testUpdateGroupCountClearsDrawOrderState() {
       './events.js': { eventBus: { on: () => {}, off: () => {}, emit: () => {} } },
       './order-page.js': { stopOrderAnimation: () => { stopOrderCalled = true; store.drawOrderState = null; store.isGeneratingOrder = false; } },
       './draw-page.js': { stopDrawAnimation: () => {} },
+      './session-persistence.js': { saveSessionDebounced: () => {} },
       '../draw-algorithm.js': { default: DrawAlgorithm },
     },
     {

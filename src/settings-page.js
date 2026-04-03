@@ -7,6 +7,7 @@ import { escapeHtml } from './utils.js';
 import { stopOrderAnimation } from './order-page.js';
 import { stopDrawAnimation } from './draw-page.js';
 import { eventBus } from './events.js';
+import { saveSessionNow } from './session-persistence.js';
 import DrawAlgorithm from '../draw-algorithm.js';
 
 export function renderTeamTable() {
@@ -86,6 +87,9 @@ export function updateGroupCount() {
       renderProjectList();
       eventBus.emit('groupCountUpdated');
       eventBus.emit('updateUIForProject');
+      void saveSessionNow(store).catch((error) => {
+        console.warn('Failed to persist updated group count:', error);
+      });
     },
     null,
     MIN_GROUP_COUNT,
@@ -145,4 +149,7 @@ export function selectProject(projectName) {
   renderProjectList();
   updateNavigationState();
   updatePageHeaders();
+  void saveSessionNow(store).catch((error) => {
+    console.warn('Failed to persist selected project state:', error);
+  });
 }

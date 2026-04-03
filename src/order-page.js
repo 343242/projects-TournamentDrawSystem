@@ -7,6 +7,7 @@ import { shuffleArray, escapeHtml } from './utils.js';
 import { eventBus } from './events.js';
 import { flyElement, flashRandomNames } from './animation.js';
 import { cancelActiveAnimations, pauseAnimState, stopAnimState, createAnimationState } from './animation-helpers.js';
+import { saveSessionDebounced } from './session-persistence.js';
 
 function handleRunningOrder(state, btn, project) {
   if (pauseAnimState(state)) {
@@ -20,6 +21,7 @@ function handleRunningOrder(state, btn, project) {
     if (project) {
       project.drawOrderProgress = state.currentIndex;
     }
+    saveSessionDebounced(store);
   }
 }
 
@@ -79,6 +81,7 @@ function initNewOrderDraw(project, btn) {
     project.drawOrderSequence = drawSequence;
     project.drawOrderProgress = 0;
   }
+  saveSessionDebounced(store);
 
   const tbody = document.querySelector('#order-table tbody');
   tbody.innerHTML = '';
@@ -162,6 +165,7 @@ export function drawNextFromState() {
     const proj = store.currentProject ? store.projectsData[store.currentProject] : null;
     if (proj) {
       proj.drawOrderGenerated = true;
+      proj.drawOrderProgress = state.currentIndex;
     }
 
     updateNavigationState();
@@ -169,6 +173,7 @@ export function drawNextFromState() {
     eventBus.emit('renderProjectList');
 
     store.isGeneratingOrder = false;
+    saveSessionDebounced(store);
     return;
   }
 
@@ -267,6 +272,7 @@ export function drawNextFromState() {
           if (proj) {
             proj.drawOrderProgress = state.currentIndex;
           }
+          saveSessionDebounced(store);
 
           if (state.pendingPause) {
             state.pendingPause = false;
@@ -336,6 +342,7 @@ export function pauseOrderDraw() {
     if (project) {
       project.drawOrderProgress = state.currentIndex;
     }
+    saveSessionDebounced(store);
   }
 }
 

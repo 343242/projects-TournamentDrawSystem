@@ -1,12 +1,40 @@
 // 页面导航逻辑
 
 import { store } from './store.js';
+import { saveSessionNow } from './session-persistence.js';
 
 // 页面进入时的初始化回调注册
 const pageInitCallbacks = {};
 // 页面离开时的回调注册
 const pageLeaveCallbacks = {};
-let currentPage = null;
+let currentPage = store.activePage || 'settings';
+
+function canAccessPage(pageId) {
+  switch (pageId) {
+    case 'settings':
+      return true;
+    case 'order':
+      return store.sheetNames.length > 0;
+    case 'draw':
+      return store.sheetNames.length > 0 &&
+        Boolean(store.currentProject) &&
+        Boolean(store.projectsData[store.currentProject]?.drawOrderGenerated);
+    default:
+      return false;
+  }
+}
+
+export function resolveAccessiblePage(pageId = store.activePage) {
+  if (canAccessPage(pageId)) {
+    return pageId;
+  }
+
+  if (pageId === 'draw' && canAccessPage('order')) {
+    return 'order';
+  }
+
+  return 'settings';
+}
 
 export function registerPageInit(pageId, callback) {
   pageInitCallbacks[pageId] = callback;
@@ -35,7 +63,6 @@ export function updateNavigationState() {
   // 初始状态：只有抽签设置可点击
   const hasData = store.sheetNames.length > 0;
   const hasDrawOrder = hasData && store.currentProject && store.projectsData[store.currentProject]?.drawOrderGenerated;
-  const hasCompletedDraw = hasData && store.currentProject && store.projectsData[store.currentProject]?.drawCompleted;
 
   // 抽签顺序导航：有数据时可点击
   if (navOrder) {
@@ -60,35 +87,42 @@ export function updateNavigationState() {
   }
 }
 
-export function switchPage(pageId) {
-  // 检查导航是否被禁用
-  const navItem = document.querySelector(`.nav-item[data-page="${pageId}"]`);
-  if (navItem && navItem.classList.contains('disabled')) {
+export function switchPage(pageId, { persist = true } = {}) {
+  const targetPage = resolveAccessiblePage(pageId);
+  const targetPageEl = document.getElementById(`page-${targetPage}`);
+  if (!targetPageEl) {
     return;
   }
 
   // 执行当前页面的离开回调（如离开抽签顺序页时暂停动画）
-  if (currentPage && pageLeaveCallbacks[currentPage]) {
+  if (currentPage && currentPage !== targetPage && pageLeaveCallbacks[currentPage]) {
     pageLeaveCallbacks[currentPage]();
   }
 
   // 更新导航状态
   document.querySelectorAll('.nav-item[data-page]').forEach(item => {
-    item.classList.toggle('active', item.dataset.page === pageId);
+    item.classList.toggle('active', item.dataset.page === targetPage);
   });
 
   // 切换页面
   document.querySelectorAll('.page').forEach(page => {
     page.classList.remove('active');
   });
-  document.getElementById(`page-${pageId}`).classList.add('active');
+  targetPageEl.classList.add('active');
 
   // 记录当前页面
-  currentPage = pageId;
+  currentPage = targetPage;
+  store.activePage = targetPage;
 
   // 执行页面进入回调（如切换到抽签页时初始化分组显示）
-  if (pageInitCallbacks[pageId]) {
-    pageInitCallbacks[pageId]();
+  if (pageInitCallbacks[targetPage]) {
+    pageInitCallbacks[targetPage]();
+  }
+
+  if (persist) {
+    void saveSessionNow(store).catch((error) => {
+      console.warn('Failed to persist page switch state:', error);
+    });
   }
 }
 

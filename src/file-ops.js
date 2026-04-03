@@ -2,9 +2,12 @@
 
 import { store, DEFAULT_GROUP_COUNT } from './store.js';
 import { showAlertDialog } from './dialog.js';
-import { renderProjectList } from './settings-page.js';
-import { updateNavigationState } from './navigation.js';
+import { renderProjectList, renderTeamTable } from './settings-page.js';
+import { switchPage, updateNavigationState, updatePageHeaders } from './navigation.js';
+import { renderOrderTable, updateOrderStatus, stopOrderAnimation } from './order-page.js';
+import { renderDrawResultTable, updateDrawStatus, stopDrawAnimation } from './draw-page.js';
 import { eventBus } from './events.js';
+import { saveSessionNow } from './session-persistence.js';
 
 export async function selectFile() {
   const result = await window.electronAPI.importExcel();
@@ -20,8 +23,19 @@ export async function selectFile() {
 }
 
 function processImportedData(data) {
+  stopOrderAnimation();
+  stopDrawAnimation();
+
+  store.teamsData = [];
+  store.currentProject = null;
   store.sheetNames = [];
   store.projectsData = {};
+  store.drawAlgorithm = null;
+  store.drawCompleted = false;
+  store.drawOrderState = null;
+  store.drawAnimationState = null;
+  store.isGeneratingOrder = false;
+  store.drawCount = 0;
 
   data.sheetNames.forEach(sheetName => {
     const sheetData = data.sheets[sheetName];
@@ -41,10 +55,81 @@ function processImportedData(data) {
 
   if (store.sheetNames.length > 0) {
     eventBus.emit('selectProject', store.sheetNames[0]);
+    return;
   }
+
+  store.currentFilePath = null;
+  const selectedFile = document.getElementById('selected-file');
+  if (selectedFile) selectedFile.textContent = '';
+
+  const groupsContainer = document.getElementById('groups-container');
+  if (groupsContainer) groupsContainer.innerHTML = '';
+
+  const groupCountDisplay = document.getElementById('group-count-display');
+  if (groupCountDisplay) groupCountDisplay.textContent = '-';
+
+  const totalTeamsDisplay = document.getElementById('total-teams-display');
+  if (totalTeamsDisplay) totalTeamsDisplay.textContent = '0';
+
+  const teamCount = document.getElementById('team-count');
+  if (teamCount) teamCount.value = '0';
+
+  const nextSettingsBtn = document.getElementById('next-settings-btn');
+  if (nextSettingsBtn) nextSettingsBtn.disabled = true;
+
+  const nextOrderBtn = document.getElementById('next-order-btn');
+  if (nextOrderBtn) nextOrderBtn.disabled = true;
+
+  const groupCountBtn = document.querySelector('[data-action="update-group-count"]');
+  if (groupCountBtn) groupCountBtn.disabled = true;
+
+  const exportBtn = document.getElementById('export-btn');
+  if (exportBtn) exportBtn.disabled = true;
+
+  const generateOrderBtn = document.getElementById('generate-order-btn');
+  if (generateOrderBtn) {
+    generateOrderBtn.disabled = false;
+    generateOrderBtn.innerHTML = '<span class="btn-icon">🎲</span>启动抽签';
+    generateOrderBtn.className = 'btn btn-success btn-large';
+  }
+
+  const startDrawBtn = document.getElementById('start-draw-btn');
+  if (startDrawBtn) {
+    startDrawBtn.disabled = true;
+    startDrawBtn.innerHTML = '<span class="btn-icon">🎰</span>开始抽签';
+    startDrawBtn.className = 'btn btn-success btn-large';
+  }
+
+  const resetDrawBtn = document.getElementById('reset-draw-btn');
+  if (resetDrawBtn) resetDrawBtn.disabled = true;
+
+  const finalExportBtn = document.getElementById('final-export-btn');
+  if (finalExportBtn) finalExportBtn.disabled = true;
+
+  const drawSlot = document.getElementById('draw-slot');
+  if (drawSlot) {
+    drawSlot.classList.remove('active');
+    drawSlot.innerHTML = '<span class="slot-text">等待抽签</span>';
+  }
+
+  const drawStatusCount = document.getElementById('draw-status-count');
+  if (drawStatusCount) drawStatusCount.textContent = '剩余: -- 支';
+
+  renderTeamTable();
+  renderOrderTable();
+  renderDrawResultTable();
+  updateDrawStatus();
+  updateOrderStatus();
+  updatePageHeaders();
+  switchPage('settings', { persist: false });
+
+  showAlertDialog('未解析到可用的比赛项目');
 
   renderProjectList();
   updateNavigationState();
+  void saveSessionNow(store).catch((error) => {
+    console.warn('Failed to persist imported data:', error);
+  });
 }
 
 export function parseSheetData(data) {

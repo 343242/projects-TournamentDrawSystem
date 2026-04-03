@@ -2,13 +2,15 @@
 
 import { store, DEFAULT_GROUP_COUNT, MIN_GROUP_COUNT } from './store.js';
 import { eventBus } from './events.js';
-import { showConfirmDialog } from './dialog.js';
-import { switchPage, goToNext, goToPrev, updateNavigationState, updatePageHeaders, registerPageInit, registerPageLeave } from './navigation.js';
-import { startDrawSystem, changeBackground, loadCustomBackground } from './welcome.js';
+import { showAlertDialog, showConfirmDialog } from './dialog.js';
+import { switchPage, goToNext, goToPrev, updateNavigationState, updatePageHeaders, registerPageInit, registerPageLeave, resolveAccessiblePage } from './navigation.js';
+import { startDrawSystem, changeBackground, loadCustomBackground, restoreMainApp } from './welcome.js';
 import { renderTeamTable, updateGroupCount, renderProjectList, selectProject } from './settings-page.js';
 import { generateOrder, renderOrderTable, updateOrderStatus, stopOrderAnimation, pauseOrderDraw } from './order-page.js';
 import { initGroupsDisplay, startDrawAnimation, resetDraw, createTeamItem, renderDrawResultTable, updateDrawStatus, pauseDrawAnimation, stopDrawAnimation, restoreDrawDisplay, initDrawPage } from './draw-page.js';
 import { selectFile, exportResult } from './file-ops.js';
+import { clearSession, loadAndRestoreSession, saveSessionNow } from './session-persistence.js';
+import DrawAlgorithm from '../draw-algorithm.js';
 
 // ========== Cross-page coordination via EventBus ==========
 
@@ -23,6 +25,8 @@ eventBus.on('groupCountUpdated', () => {
   renderDrawResultTable();
   updateDrawStatus();
 });
+
+let pendingUnloadFlush = null;
 
 function updateUIForProject() {
   if (!store.currentProject) return;
@@ -128,7 +132,22 @@ function updateUIForProject() {
 }
 
 function clearData() {
-  showConfirmDialog('确定要清除所有数据吗？', () => {
+  showConfirmDialog('确定要清除所有数据吗？', async () => {
+    let clearResult;
+
+    try {
+      clearResult = await clearSession();
+    } catch (error) {
+      showAlertDialog(`清除会话失败: ${error.message || '未知错误'}`);
+      return;
+    }
+
+    if (!clearResult?.success) {
+      console.warn('Failed to clear persisted session:', clearResult?.error || 'Unknown error');
+      showAlertDialog(`清除会话失败: ${clearResult?.error || '未知错误'}`);
+      return;
+    }
+
     stopOrderAnimation();
     stopDrawAnimation();
 
@@ -140,6 +159,9 @@ function clearData() {
     store.drawAlgorithm = null;
     store.drawCompleted = false;
     store.drawOrderState = null;
+    store.drawAnimationState = null;
+    store.isGeneratingOrder = false;
+    store.drawCount = 0;
 
     const el = (id) => document.getElementById(id);
     const set = (id, prop, val) => { const e = el(id); if (e) e[prop] = val; };
@@ -157,6 +179,7 @@ function clearData() {
 
     renderTeamTable();
     renderProjectList();
+    switchPage('settings', { persist: false });
     updateNavigationState();
     updatePageHeaders();
 
@@ -190,8 +213,64 @@ function clearData() {
   });
 }
 
+function shouldFlushSessionOnUnload() {
+  return store.appStarted ||
+    typeof store.currentFilePath === 'string' ||
+    Boolean(store.currentProject) ||
+    store.sheetNames.length > 0 ||
+    Object.keys(store.projectsData).length > 0 ||
+    store.activePage !== 'settings';
+}
+
+function flushPendingSessionState() {
+  if (!shouldFlushSessionOnUnload()) {
+    return Promise.resolve({ skipped: true });
+  }
+
+  if (!pendingUnloadFlush) {
+    pendingUnloadFlush = saveSessionNow(store)
+      .catch((error) => {
+        console.warn('Failed to flush session during shutdown:', error);
+        return { success: false, error: error.message };
+      })
+      .finally(() => {
+        pendingUnloadFlush = null;
+      });
+  }
+
+  return pendingUnloadFlush;
+}
+
+function syncSelectedFileLabel() {
+  const fileLabel = document.getElementById('selected-file');
+  if (fileLabel) {
+    fileLabel.textContent = store.currentFilePath ? `已选择: ${store.currentFilePath}` : '';
+  }
+}
+
+function applyRestoredSessionState() {
+  syncSelectedFileLabel();
+  renderProjectList();
+  updateNavigationState();
+  updatePageHeaders();
+  updateOrderStatus();
+
+  if (store.currentProject) {
+    eventBus.emit('updateUIForProject');
+  }
+
+  const restoredPage = store.activePage;
+  const safePage = resolveAccessiblePage(restoredPage);
+  switchPage(safePage, { persist: safePage !== restoredPage });
+
+  if (store.appStarted) {
+    restoreMainApp();
+  }
+}
+
 function exitApp() {
-  showConfirmDialog('确定要退出系统吗？', () => {
+  showConfirmDialog('确定要退出系统吗？', async () => {
+    await flushPendingSessionState();
     window.close();
   });
 }
@@ -204,9 +283,17 @@ registerPageLeave('draw', pauseDrawAnimation);
 
 registerPageLeave('order', pauseOrderDraw);
 
+window.addEventListener('beforeunload', () => {
+  void flushPendingSessionState();
+});
+
+window.addEventListener('unload', () => {
+  void flushPendingSessionState();
+});
+
 // ========== Initialize ==========
 
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
   document.addEventListener('click', (event) => {
     const button = event.target.closest('[data-action]');
     if (!button) return;
@@ -232,10 +319,18 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   loadCustomBackground();
-  updateNavigationState();
-  updateOrderStatus();
-  renderProjectList();
+  const restoreResult = await loadAndRestoreSession(store, DrawAlgorithm);
+
+  if (restoreResult.restored) {
+    applyRestoredSessionState();
+  } else {
+    updateNavigationState();
+    updateOrderStatus();
+    renderProjectList();
+  }
 
   const groupCountBtn = document.querySelector('[data-action="update-group-count"]');
-  if (groupCountBtn) groupCountBtn.disabled = true;
+  if (groupCountBtn) {
+    groupCountBtn.disabled = !store.currentProject || store.teamsData.length === 0;
+  }
 });

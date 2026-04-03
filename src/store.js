@@ -10,6 +10,8 @@ export const store = {
   drawAlgorithm: null,
   currentFilePath: null,
   drawCount: 0,
+  activePage: 'settings',
+  appStarted: false,
 
   get drawCompleted() {
     if (this.currentProject && this.projectsData[this.currentProject]) {

@@ -1,10 +1,25 @@
 // Startup page logic
 
+import { saveSessionNow } from './session-persistence.js';
+import { store } from './store.js';
 import { isSafeImageDataUri } from './utils.js';
 
-export function startDrawSystem() {
+function showMainApp({ immediate = false } = {}) {
   const welcomePage = document.getElementById('welcome-page');
   const mainApp = document.getElementById('main-app');
+
+  if (!welcomePage || !mainApp) {
+    return;
+  }
+
+  store.appStarted = true;
+
+  if (immediate) {
+    welcomePage.classList.remove('fade-out');
+    welcomePage.style.display = 'none';
+    mainApp.classList.remove('hidden');
+    return;
+  }
 
   welcomePage.classList.add('fade-out');
 
@@ -12,6 +27,17 @@ export function startDrawSystem() {
     welcomePage.style.display = 'none';
     mainApp.classList.remove('hidden');
   }, 500);
+}
+
+export function startDrawSystem() {
+  showMainApp();
+  void saveSessionNow(store).catch((error) => {
+    console.warn('Failed to persist app entry state:', error);
+  });
+}
+
+export function restoreMainApp() {
+  showMainApp({ immediate: true });
 }
 
 export async function changeBackground() {
